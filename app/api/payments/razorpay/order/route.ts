@@ -3,10 +3,13 @@ import Razorpay from 'razorpay';
 import { db } from '@/lib/config/database';
 import * as admin from 'firebase-admin';
 
-const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID!,
-    key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
+// Lazy init — avoids crash during `next build` when env vars are absent
+function getRazorpay() {
+    return new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID!,
+        key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    });
+}
 
 // Extract uid from Bearer token
 async function getFirebaseUid(req: NextRequest): Promise<string | null> {
@@ -50,7 +53,7 @@ export async function POST(req: NextRequest) {
         // Razorpay expects amount in paise (1 INR = 100 paise)
         const amountInPaise = Math.round(order?.totalAmount * 100);
 
-        const razorpayOrder = await razorpay.orders.create({
+        const razorpayOrder = await getRazorpay().orders.create({
             amount: amountInPaise,
             currency: 'INR',
             receipt: order_id,
