@@ -79,7 +79,6 @@ export async function syncProductToDatabase(sanityDocumentId: string): Promise<S
             // Normalized fields for Flutter Product.fromApiMap compatibility
             title: product.name,
             imageUrl: product.imageUrl || null,
-            images: product.images || [],
             availableSizes: product.sizes || [],
             availableColors: product.colors || [],
             stockStatus: (product.stock || 0) > 0 ? 'inStock' : 'outOfStock',
