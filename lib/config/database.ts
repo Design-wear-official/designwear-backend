@@ -4,7 +4,10 @@ import { logger } from '../utils/logger';
 const FIREBASE_PROJECT_ID =
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
     process.env.FIREBASE_PROJECT_ID ||
-    'designwear-app-8984';
+    'designwear-731c9';
+
+// Track whether Firebase Admin was initialized with real credentials
+export let firebaseReady = false;
 
 function initializeFirebaseAdmin() {
     if (admin.apps.length) return;
@@ -12,14 +15,13 @@ function initializeFirebaseAdmin() {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
     if (!serviceAccountKey) {
-        // Build-time: env vars not available yet — initialize with just projectId so the
-        // module loads without crashing. Runtime requests will have the real credentials.
-        logger.warn('FIREBASE_SERVICE_ACCOUNT_KEY not set — Firebase Admin running in limited mode');
-        try {
-            admin.initializeApp({ projectId: FIREBASE_PROJECT_ID });
-        } catch (e) {
-            // Already initialized — ignore
-        }
+        logger.error(
+            'FIREBASE_SERVICE_ACCOUNT_KEY is not set. ' +
+            'Add it to Vercel Environment Variables (Project Settings → Environment Variables). ' +
+            'Get it from Firebase Console → Project Settings → Service Accounts → Generate new private key.'
+        );
+        // Do NOT call initializeApp without credentials — it silently uses ADC which hangs on Vercel.
+        firebaseReady = false;
         return;
     }
 
@@ -35,26 +37,19 @@ function initializeFirebaseAdmin() {
             parsedKey = parsedKey.slice(1, -1);
         }
 
-        // Strategy: parse first WITHOUT pre-processing.
-        // Pre-processing newlines before JSON.parse is wrong — it breaks valid JSON
-        // that already contains proper \n escape sequences.
         let serviceAccount: Record<string, unknown>;
         try {
             serviceAccount = JSON.parse(parsedKey);
         } catch {
-            // Fallback: the value was pasted into Vercel with actual raw newline characters
-            // inside the JSON string (shows as "Bad control character" error).
-            // Escape all raw newlines so JSON.parse can succeed.
+            // Fallback: value was pasted with raw newlines instead of \n escape sequences
             const escaped = parsedKey
-                .replace(/\r\n/g, '\\n')   // Windows CRLF
-                .replace(/\r/g, '\\n')     // Old Mac CR
-                .replace(/\n/g, '\\n');    // Unix LF
+                .replace(/\r\n/g, '\\n')
+                .replace(/\r/g, '\\n')
+                .replace(/\n/g, '\\n');
             serviceAccount = JSON.parse(escaped);
         }
 
-        // Fix private_key AFTER parsing:
-        // .env.local via dotenv → JSON.parse gives literal \n (backslash+n, 2 chars).
-        // Firebase Admin needs actual newline chars in the PEM. Convert them.
+        // dotenv gives literal \n (2 chars); Firebase Admin needs actual newline chars in the PEM
         if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
             serviceAccount.private_key = (serviceAccount.private_key as string).replace(/\\n/g, '\n');
         }
@@ -64,29 +59,40 @@ function initializeFirebaseAdmin() {
             projectId: (serviceAccount.project_id as string) || FIREBASE_PROJECT_ID,
         });
 
+        firebaseReady = true;
         logger.info('Firebase Admin initialized successfully');
     } catch (e) {
         logger.error('Failed to initialize Firebase Admin — check FIREBASE_SERVICE_ACCOUNT_KEY format:', e);
-        // Last-resort fallback — at least prevents a full crash
-        try {
-            admin.initializeApp({ projectId: FIREBASE_PROJECT_ID });
-        } catch {
-            // Already initialized — ignore
-        }
+        firebaseReady = false;
     }
 }
 
 initializeFirebaseAdmin();
 
-export const db = admin.firestore();
+// Lazy Firestore accessor — throws a clear 503 error instead of hanging when credentials are missing
+function getDb(): admin.firestore.Firestore {
+    if (!firebaseReady) {
+        throw new Error(
+            'Firebase Admin is not initialized. ' +
+            'Set FIREBASE_SERVICE_ACCOUNT_KEY in Vercel Environment Variables and redeploy.'
+        );
+    }
+    return admin.firestore();
+}
+
+// Proxy that forwards property access to the real Firestore instance (or throws fast)
+export const db = new Proxy({} as admin.firestore.Firestore, {
+    get(_target, prop) {
+        const firestore = getDb();
+        const value = (firestore as unknown as Record<string | symbol, unknown>)[prop];
+        return typeof value === 'function' ? value.bind(firestore) : value;
+    },
+});
 
 export async function connectDatabase(): Promise<void> {
-    // Firestore does not require explicit connection pooling setup like PG.
-    // This function is kept for backwards compatibility with server.ts startup logic.
     logger.info('Firestore Database connected');
 }
 
 export async function closeDatabaseConnection(): Promise<void> {
-    // Firestore handles its own connection lifecycle.
     logger.info('Database pool closed (No-op for Firestore)');
 }

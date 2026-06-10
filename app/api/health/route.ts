@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as admin from 'firebase-admin';
+import { firebaseReady, db } from '@/lib/config/database';
 
 export async function GET() {
     try {
@@ -12,16 +12,19 @@ export async function GET() {
             }
         };
 
-        try {
-            // Firebase Admin initialization check
-            if (!admin.apps.length) {
-                admin.initializeApp({
-                    credential: admin.credential.applicationDefault(),
-                    projectId: process.env.GCP_PROJECT_ID || 'designwear-app-8984'
-                });
-            }
+        if (!firebaseReady) {
+            healthStatus.services.database = 'misconfigured';
+            return NextResponse.json(
+                {
+                    ...healthStatus,
+                    status: 'degraded',
+                    error: 'FIREBASE_SERVICE_ACCOUNT_KEY is not set. Add it to Vercel Environment Variables and redeploy.'
+                },
+                { status: 503 }
+            );
+        }
 
-            const db = admin.firestore();
+        try {
             await db.listCollections();
             healthStatus.services.database = 'connected';
         } catch (dbError: unknown) {
@@ -31,14 +34,13 @@ export async function GET() {
         }
 
         const statusCode = healthStatus.status === 'ok' ? 200 : 503;
-
         return NextResponse.json(healthStatus, { status: statusCode });
     } catch (error: unknown) {
         console.error('Health check failed:', error);
         return NextResponse.json({
             status: 'error',
             timestamp: new Date().toISOString(),
-            error: 'Internal server error during health check'
+            error: error instanceof Error ? error.message : 'Internal server error during health check'
         }, { status: 500 });
     }
 }
