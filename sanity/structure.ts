@@ -7,7 +7,7 @@ import {
   ArchiveIcon,
   ActivityIcon,
   BellIcon,
-  TruckIcon,
+  TrolleyIcon,
   SparklesIcon,
   StarIcon,
 } from '@sanity/icons'
@@ -78,7 +78,7 @@ export const structure = (S: StructureBuilder) =>
                 .icon(ActivityIcon),
               S.documentTypeListItem('supplier')
                 .title('Suppliers')
-                .icon(TruckIcon),
+                .icon(TrolleyIcon),
             ])
         ),
       S.divider(),

@@ -13,9 +13,17 @@
   },
   "dependencies": {
     "@google/genai": "^1.43.0",
+    "@mux/mux-video": "^0.31.0",
+    "@mux/playback-core": "^0.35.0",
     "@sanity/image-url": "^1.2.0",
     "@sanity/vision": "^4.22.0",
+    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/table-core": "^8.21.3",
+    "color2k": "^2.0.3",
     "firebase-admin": "^13.7.0",
+    "framer-motion": "^12.40.0",
+    "groq-js": "^1.30.2",
+    "hls.js": "^1.6.16",
     "next": "^16.2.3",
     "next-sanity": "^12.1.0",
     "razorpay": "^2.9.2",
@@ -43,5 +51,8 @@
   },
   "overrides": {
     "@tootallnate/once": "^3.0.1"
+  },
+  "optionalDependencies": {
+    "@next/swc-win32-x64-msvc": "^16.2.7"
   }
 }
