@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Box, Card, Text, Badge, Stack, Table, TableRow, TableCell, TableHead, TableBody } from '@sanity/ui'
+import { Box, Card, Text, Badge, Stack } from '@sanity/ui'
 
 interface Operation {
   id: string
@@ -16,6 +16,9 @@ export default function recentOperationsWidget() {
     layout: { width: 'large', height: 'medium' },
   }
 }
+
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--card-border-color)' }
+const tdStyle: React.CSSProperties = { padding: '4px 8px', borderBottom: '1px solid var(--card-border-color)' }
 
 function RecentOperationsComponent() {
   const [operations, setOperations] = useState<Operation[]>([])
@@ -49,50 +52,33 @@ function RecentOperationsComponent() {
           </Text>
         ) : (
           <Box style={{ maxHeight: '280px', overflowY: 'auto' }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>
-                    <Text size={1} weight="semibold">Type</Text>
-                  </TableCell>
-                  <TableCell>
-                    <Text size={1} weight="semibold">Document</Text>
-                  </TableCell>
-                  <TableCell>
-                    <Text size={1} weight="semibold">Time</Text>
-                  </TableCell>
-                  <TableCell>
-                    <Text size={1} weight="semibold">Status</Text>
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}><Text size={1} weight="semibold">Type</Text></th>
+                  <th style={thStyle}><Text size={1} weight="semibold">Document</Text></th>
+                  <th style={thStyle}><Text size={1} weight="semibold">Time</Text></th>
+                  <th style={thStyle}><Text size={1} weight="semibold">Status</Text></th>
+                </tr>
+              </thead>
+              <tbody>
                 {operations.map((op) => (
-                  <TableRow key={op.id}>
-                    <TableCell>
-                      <Text size={1}>{op.type}</Text>
-                    </TableCell>
-                    <TableCell>
-                      <Text size={1}>{op.document}</Text>
-                    </TableCell>
-                    <TableCell>
-                      <Text size={1} muted>
-                        {new Date(op.timestamp).toLocaleTimeString()}
-                      </Text>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        tone={op.status === 'success' ? 'positive' : 'critical'}
-                        padding={2}
-                        fontSize={0}
-                      >
+                  <tr key={op.id}>
+                    <td style={tdStyle}><Text size={1}>{op.type}</Text></td>
+                    <td style={tdStyle}><Text size={1}>{op.document}</Text></td>
+                    <td style={tdStyle}>
+                      <Text size={1} muted>{new Date(op.timestamp).toLocaleTimeString()}</Text>
+                    </td>
+                    <td style={tdStyle}>
+                      <Badge tone={op.status === 'success' ? 'positive' : 'critical'} padding={2} fontSize={0}>
                         {op.status}
                       </Badge>
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
+
           </Box>
         )}
       </Stack>

@@ -1,7 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import crypto from 'crypto';
-import { db } from '@/lib/config/database';
-import * as admin from 'firebase-admin';
+import { db, auth } from '@/lib/config/database';
 import { createClient } from '@sanity/client';
 
 const sanityClient = createClient({
@@ -19,7 +18,7 @@ async function getFirebaseUid(req: NextRequest): Promise<string | null> {
 
     try {
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await admin.auth().verifyIdToken(token);
+        const decodedToken = await auth.verifyIdToken(token);
         return decodedToken.uid;
     } catch {
         return null;

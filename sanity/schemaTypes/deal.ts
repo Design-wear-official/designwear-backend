@@ -24,7 +24,7 @@ export default defineType({
   ],
   preview: {
     select: { title: 'label', subtitle: 'discountPercent' },
-    prepare: ({ title, subtitle }: { title: string; subtitle: number }) => ({
+    prepare: ({ title, subtitle }) => ({
       title,
       subtitle: subtitle ? `${subtitle}% off` : '',
     }),

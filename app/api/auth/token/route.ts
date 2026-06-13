@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import * as admin from 'firebase-admin';
-import '@/lib/config/database'; // ensure Firebase Admin is initialized
+import { auth } from '@/lib/config/database';
 
 /**
  * POST /api/auth/token
@@ -17,11 +16,11 @@ export async function POST(req: NextRequest) {
         const idToken = authHeader.replace('Bearer ', '');
 
         // Verify the ID token
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await auth.verifyIdToken(idToken);
         const uid = decodedToken.uid;
 
         // Create a custom token for the user
-        const customToken = await admin.auth().createCustomToken(uid);
+        const customToken = await auth.createCustomToken(uid);
 
         return NextResponse.json({
             success: true,
@@ -49,7 +48,7 @@ export async function GET(req: NextRequest) {
         }
 
         const idToken = authHeader.replace('Bearer ', '');
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await auth.verifyIdToken(idToken);
 
         return NextResponse.json({
             success: true,

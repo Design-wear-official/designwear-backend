@@ -1,5 +1,4 @@
-import { db } from '@/lib/config/database';
-import * as admin from 'firebase-admin';
+import { db, messaging } from '@/lib/config/database';
 import { client } from '@/sanity/lib/client';
 
 /**
@@ -54,7 +53,7 @@ export async function sendNotificationFromTemplate(uid: string, eventType: strin
         token: fcmToken
     };
 
-    const response = await admin.messaging().send(message);
+    const response = await messaging.send(message);
     console.log(`Successfully sent message to ${uid}:`, response);
     return true;
   } catch (error) {

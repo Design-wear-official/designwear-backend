@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { db } from '@/lib/config/database';
-import * as admin from 'firebase-admin';
+import { db, auth } from '@/lib/config/database';
 
 async function getFirebaseTokenInfo(req: NextRequest): Promise<{ uid: string | null; error?: any }> {
     const authHeader = req.headers.get('authorization');
@@ -8,7 +7,7 @@ async function getFirebaseTokenInfo(req: NextRequest): Promise<{ uid: string | n
 
     try {
         const token = authHeader.split('Bearer ')[1];
-        const decodedToken = await admin.auth().verifyIdToken(token);
+        const decodedToken = await auth.verifyIdToken(token);
         return { uid: decodedToken.uid };
     } catch (error: any) {
         console.error('Firebase ID token verification failed:', error);

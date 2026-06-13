@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import * as admin from 'firebase-admin';
-import '@/lib/config/database'; // ensure Firebase Admin is initialized
+import { auth } from '@/lib/config/database';
 
 /**
  * GET /api/auth/tokens
@@ -17,11 +16,11 @@ export async function GET(req: NextRequest) {
         const idToken = authHeader.replace('Bearer ', '');
 
         // Verify the ID token
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await auth.verifyIdToken(idToken);
         const uid = decodedToken.uid;
 
         // Retrieve user record to get refresh token revocation time
-        const userRecord = await admin.auth().getUser(uid);
+        const userRecord = await auth.getUser(uid);
 
         return NextResponse.json({
             success: true,
@@ -52,10 +51,10 @@ export async function DELETE(req: NextRequest) {
         }
 
         const idToken = authHeader.replace('Bearer ', '');
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await auth.verifyIdToken(idToken);
         const uid = decodedToken.uid;
 
-        await admin.auth().revokeRefreshTokens(uid);
+        await auth.revokeRefreshTokens(uid);
 
         return NextResponse.json({
             success: true,

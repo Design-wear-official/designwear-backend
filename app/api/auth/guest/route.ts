@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/config/database';
-import * as admin from 'firebase-admin';
+import { db, auth } from '@/lib/config/database';
 import { syncCustomerToSanity } from '@/lib/services/syncService';
 
 export async function POST() {
     try {
         // 1. Create completely anonymous account securely using the elevated Admin SDK privileges
-        const userRecord = await admin.auth().createUser({});
+        const userRecord = await auth.createUser({});
         const guestUid = userRecord.uid;
 
         // 2. Generate a custom session token for the frontend to digest
-        const customToken = await admin.auth().createCustomToken(guestUid);
+        const customToken = await auth.createCustomToken(guestUid);
 
         // 3. Exchange custom token for ID token using REST API (ID token is verifiable by backend)
         const apiKey = process.env.FIREBASE_API_KEY;

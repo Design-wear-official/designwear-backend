@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { db } from '@/lib/config/database';
-import * as admin from 'firebase-admin';
+import { db, auth } from '@/lib/config/database';
 import { syncCustomerToSanity } from '@/lib/services/syncService';
 
 export async function POST(req: NextRequest) {
@@ -33,7 +32,7 @@ export async function POST(req: NextRequest) {
            if (photoUrl) authUpdate.photoURL = photoUrl;
            
            try {
-             await admin.auth().updateUser(uid, authUpdate);
+             await auth.updateUser(uid, authUpdate);
            } catch (authErr) {
              console.warn('Failed to update Firebase Auth user (could be a guest or non-existent auth record):', authErr);
            }

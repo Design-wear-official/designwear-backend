@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { db } from '@/lib/config/database';
-import * as admin from 'firebase-admin';
+import { db, auth } from '@/lib/config/database';
 import { syncCustomerToSanity } from '@/lib/services/syncService';
 
 export async function POST(req: NextRequest) {
@@ -13,7 +12,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 1. Create User in Firebase Auth
-        const userRecord = await admin.auth().createUser({
+        const userRecord = await auth.createUser({
             email,
             password,
             displayName: name || '',

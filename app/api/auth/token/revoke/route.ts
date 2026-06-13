@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import * as admin from 'firebase-admin';
-import '@/lib/config/database'; // ensure Firebase Admin is initialized
+import { auth } from '@/lib/config/database';
 
 /**
  * POST /api/auth/token/revoke
@@ -17,11 +16,11 @@ export async function POST(req: NextRequest) {
         const idToken = authHeader.replace('Bearer ', '');
 
         // Verify the ID token first
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await auth.verifyIdToken(idToken);
         const uid = decodedToken.uid;
 
         // Revoke all refresh tokens for this user
-        await admin.auth().revokeRefreshTokens(uid);
+        await auth.revokeRefreshTokens(uid);
 
         return NextResponse.json({
             success: true,
