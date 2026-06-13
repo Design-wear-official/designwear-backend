@@ -12,47 +12,47 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google/genai": "^1.43.0",
+    "@google/genai": "^2.8.0",
     "@mux/mux-video": "^0.31.0",
     "@mux/playback-core": "^0.35.0",
-    "@sanity/image-url": "^1.2.0",
-    "@sanity/vision": "^4.22.0",
+    "@sanity/image-url": "^2.1.1",
+    "@sanity/vision": "^6.0.0",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/table-core": "^8.21.3",
     "color2k": "^2.0.3",
-    "firebase-admin": "^13.7.0",
+    "firebase-admin": "^14.0.0",
     "framer-motion": "^12.40.0",
     "groq-js": "^1.30.2",
     "hls.js": "^1.6.16",
-    "next": "^16.2.3",
-    "next-sanity": "^12.1.0",
+    "next": "^16.2.9",
+    "next-sanity": "^13.1.0",
     "razorpay": "^2.9.2",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "recharts": "^3.7.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "recharts": "^3.8.1",
     "styled-components": "^6.3.11",
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@sanity/client": "^7.17.0",
+    "@sanity/client": "^7.22.1",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "concurrently": "^9.2.1",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "sanity": "^5.14.1",
+    "concurrently": "^10.0.3",
+    "eslint": "^10.5.0",
+    "eslint-config-next": "16.2.9",
+    "sanity": "^6.0.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "uuid": "^13.0.0"
+    "uuid": "^14.0.0"
   },
   "overrides": {
     "@tootallnate/once": "^3.0.1"
   },
   "optionalDependencies": {
-    "@next/swc-win32-x64-msvc": "^16.2.7"
+    "@next/swc-win32-x64-msvc": "^16.2.9"
   }
 }
