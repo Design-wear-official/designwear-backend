@@ -84,14 +84,7 @@ export default defineType({
   ],
   preview: {
     select: { title: 'label', subtitle: 'action', color: 'colorHex' },
-    prepare: ({
-      title,
-      subtitle,
-    }: {
-      title: string
-      subtitle: string
-      color: string
-    }) => ({
+    prepare: ({ title, subtitle }: any) => ({
       title,
       subtitle: subtitle === 'design-studio' ? 'Opens Design Studio' : `Tab action`,
     }),
