@@ -19,6 +19,13 @@ export default defineType({
       to: [{ type: 'product' }],
       options: { disableNew: true },
     }),
+    defineField({
+      name: 'image',
+      title: 'Deal Product Image',
+      type: 'image',
+      options: { hotspot: true },
+      description: 'Product photo shown on the deal card (overrides the generic icon)',
+    }),
     defineField({ name: 'active',    title: 'Active',     type: 'boolean',  initialValue: true }),
     defineField({ name: 'expiresAt', title: 'Expires At', type: 'datetime', description: 'Leave empty for no expiry' }),
   ],
