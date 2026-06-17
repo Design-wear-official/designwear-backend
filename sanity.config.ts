@@ -26,7 +26,7 @@ export default defineConfig({
   document: {
     actions: (prev, context) => {
       return prev.map((originalAction) => {
-        // Replace the default delete action on every document type
+        // Replace the built-in delete with ForceDelete on every document type
         if (originalAction.action === 'delete') {
           return ForceDelete(originalAction)
         }
