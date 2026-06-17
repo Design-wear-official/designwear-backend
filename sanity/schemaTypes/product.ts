@@ -6,11 +6,12 @@ export default defineType({
   title: 'Product',
   type: 'document',
   groups: [
-    { name: 'basic',   title: 'Basic Info',      default: true },
-    { name: 'pricing', title: 'Pricing & Stock' },
-    { name: 'media',   title: 'Media & Variants' },
-    { name: 'studio',  title: 'Design Studio' },
-    { name: 'meta',    title: 'Metadata' },
+    { name: 'basic',     title: 'Basic Info',      default: true },
+    { name: 'pricing',   title: 'Pricing & Stock' },
+    { name: 'media',     title: 'Media & Variants' },
+    { name: 'studio',    title: 'Design Studio' },
+    { name: 'community', title: 'Community & Lineage' },
+    { name: 'meta',      title: 'Metadata' },
   ],
   fields: [
     defineField({
@@ -178,6 +179,90 @@ export default defineType({
       group: 'studio',
       of: [{ type: 'string' }],
       hidden: ({ document }) => !document?.customizable,
+    }),
+
+    // ── Community & Lineage ──────────────────────────────────────────────────
+    defineField({
+      name: 'creatorName',
+      title: 'Creator Name',
+      type: 'string',
+      group: 'community',
+      description: 'Display name shown on the design card (e.g. "Aanya R.")',
+    }),
+    defineField({
+      name: 'creatorHandle',
+      title: 'Creator Handle',
+      type: 'string',
+      group: 'community',
+      description: 'Username with @ (e.g. "@aanya")',
+    }),
+    defineField({
+      name: 'creatorFollowers',
+      title: 'Creator Followers',
+      type: 'number',
+      group: 'community',
+      description: 'Shown as "4.2k followers" in the design detail',
+      initialValue: 0,
+    }),
+    defineField({
+      name: 'garmentBaseColor',
+      title: 'Garment Hex Color',
+      type: 'string',
+      group: 'community',
+      description: 'Hex color for the preview garment tile (e.g. "#2C5F5A")',
+    }),
+    defineField({
+      name: 'artText',
+      title: 'Print Art Text',
+      type: 'string',
+      group: 'community',
+      description: 'Short text printed on the garment preview (e.g. "PETRICHOR")',
+    }),
+    defineField({
+      name: 'remixedFromHandle',
+      title: 'Remixed From (Handle)',
+      type: 'string',
+      group: 'community',
+      description: 'Handle of the parent design creator (e.g. "@kabir")',
+    }),
+    defineField({
+      name: 'remixedFromVersion',
+      title: 'Remixed From (Version)',
+      type: 'string',
+      group: 'community',
+      description: 'Fork version label (e.g. "v3")',
+    }),
+    defineField({
+      name: 'likeCount',
+      title: 'Like Count',
+      type: 'number',
+      group: 'community',
+      initialValue: 0,
+    }),
+    defineField({
+      name: 'remixCount',
+      title: 'Remix Count',
+      type: 'number',
+      group: 'community',
+      initialValue: 0,
+    }),
+    defineField({
+      name: 'lineage',
+      title: 'Design Lineage',
+      type: 'array',
+      group: 'community',
+      description: 'Chain of creators from origin to this design (oldest first)',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            { name: 'handle',     type: 'string', title: 'Handle',           description: 'e.g. @maya' },
+            { name: 'version',    type: 'string', title: 'Version Label',    description: 'e.g. "origin · v0" or "v3"' },
+            { name: 'baseColor',  type: 'string', title: 'Garment Hex Color',description: 'e.g. #1C2541' },
+            { name: 'artText',    type: 'string', title: 'Art Text'                                       },
+          ],
+        },
+      ],
     }),
 
     // ── Metadata ─────────────────────────────────────────────────────────────
