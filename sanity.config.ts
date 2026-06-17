@@ -13,6 +13,7 @@ import { apiVersion, dataset, projectId } from './sanity/env'
 import { schema } from './sanity/schemaTypes'
 import { structure } from './sanity/structure'
 import { PublishAndSync } from './sanity/actions/PublishAndSync'
+import { ForceDelete } from './sanity/actions/ForceDelete'
 import { StudioLogo } from './sanity/components/StudioLogo'
 
 export default defineConfig({
@@ -24,15 +25,17 @@ export default defineConfig({
   schema,
   document: {
     actions: (prev, context) => {
-      if (context.schemaType === 'product') {
-        return prev.map((originalAction) => {
-          if (originalAction.action === 'publish') {
-            return PublishAndSync(originalAction)
-          }
-          return originalAction
-        })
-      }
-      return prev
+      return prev.map((originalAction) => {
+        // Replace the default delete action on every document type
+        if (originalAction.action === 'delete') {
+          return ForceDelete(originalAction)
+        }
+        // Replace publish with PublishAndSync only on product documents
+        if (context.schemaType === 'product' && originalAction.action === 'publish') {
+          return PublishAndSync(originalAction)
+        }
+        return originalAction
+      })
     },
   },
   plugins: [

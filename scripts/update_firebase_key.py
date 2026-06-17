@@ -15,7 +15,7 @@ import os
 def main():
     sa_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         os.path.dirname(__file__),
-        '../../designwear-731c9-firebase-adminsdk-fbsvc-83c2a604cb.json'
+        '../../designwear-backend/designwear-731c9-firebase-adminsdk-fbsvc-b86263b0f2.json'
     )
 
     with open(sa_path) as f:

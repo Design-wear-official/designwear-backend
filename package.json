@@ -50,7 +50,8 @@
     "uuid": "^14.0.0"
   },
   "overrides": {
-    "@tootallnate/once": "^3.0.1"
+    "@tootallnate/once": "^3.0.1",
+    "jose": "4.15.9"
   },
   "optionalDependencies": {
     "@next/swc-win32-x64-msvc": "^16.2.9"

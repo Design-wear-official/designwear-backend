@@ -3,7 +3,17 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
-  serverExternalPackages: ["firebase-admin"],
+  // firebase-admin pulls in jwks-rsa which requires jose via CJS require().
+  // jose v5+ is ESM-only → require() fails. Mark all three as external so
+  // Turbopack lets Node.js load them natively instead of bundling them.
+  serverExternalPackages: [
+    "firebase-admin",
+    "firebase-admin/auth",
+    "firebase-admin/firestore",
+    "firebase-admin/messaging",
+    "jwks-rsa",
+    "jose",
+  ],
   async headers() {
     return [
       {

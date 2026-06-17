@@ -34,7 +34,7 @@ export function PublishAndSync(originalPublishAction: DocumentActionComponent): 
                             const errorData = await response.json().catch(() => ({}))
                             toast.push({
                                 title: 'Firebase Sync Error',
-                                description: errorData.error || 'Failed to sync with Firebase',
+                                description: errorData.error || errorData.message || 'Failed to sync with Firebase',
                                 status: 'error',
                             })
                             console.error('Sync failed:', errorData)

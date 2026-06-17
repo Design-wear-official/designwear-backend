@@ -1,9 +1,23 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { syncProductToDatabase, checkDocumentExists } from '@/lib/services/syncService';
-import { db } from '@/lib/config/database';
+import { db, firebaseReady } from '@/lib/config/database';
 import { logger } from '@/lib/utils/logger';
 
+function firebaseNotReadyResponse() {
+    return NextResponse.json(
+        {
+            success: false,
+            error: 'Firebase Admin SDK is not initialized on Vercel. '
+                + 'Go to Vercel Dashboard → your project → Settings → Environment Variables '
+                + 'and add FIREBASE_SERVICE_ACCOUNT_KEY (paste the full service account JSON). '
+                + 'Then redeploy.',
+        },
+        { status: 503 },
+    );
+}
+
 export async function GET(req: NextRequest) {
+    if (!firebaseReady) return firebaseNotReadyResponse();
     try {
         const url = new URL(req.url);
         const action = url.pathname.split('/').pop();
@@ -42,6 +56,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+    if (!firebaseReady) return firebaseNotReadyResponse();
     try {
         const url = new URL(req.url);
         const action = url.pathname.split('/').pop();
