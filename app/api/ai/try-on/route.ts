@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 
 const apiKey = process.env.GEMINI_API_KEY;
-const MODEL_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent';
+const MODEL_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent';
 
 export async function POST(req: NextRequest) {
     try {
@@ -60,7 +60,11 @@ Output: A single high-quality image of the person wearing the clothing item.`
         const data = await response.json();
 
         if (!response.ok) {
-            return NextResponse.json({ success: false, error: data.error?.message || 'Gemini API Error' }, { status: response.status });
+            const errMsg: string = data.error?.message || 'Gemini API Error';
+            const userMsg = errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')
+                ? 'Virtual Try-On requires a paid Gemini API plan. Enable billing at aistudio.google.com and ensure your GEMINI_API_KEY has access to gemini-3.1-flash-image.'
+                : errMsg;
+            return NextResponse.json({ success: false, error: userMsg }, { status: response.status });
         }
 
         const candidates = data.candidates || [];
