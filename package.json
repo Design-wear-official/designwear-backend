@@ -36,7 +36,7 @@
   "devDependencies": {
     "@sanity/client": "^7.22.1",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^25",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
@@ -46,12 +46,20 @@
     "eslint-config-next": "16.2.9",
     "sanity": "^6.0.0",
     "tailwindcss": "^4",
-    "typescript": "^5",
+    "typescript": "^6",
     "uuid": "^14.0.0"
   },
   "overrides": {
     "@tootallnate/once": "^3.0.1",
-    "jose": "4.15.9"
+    "jose": "4.15.9",
+    "path-to-regexp": "^8.4.2",
+    "cookie": "^1.1.1",
+    "semver": "^7.8.5",
+    "tough-cookie": "^6.0.1",
+    "micromatch": "^4.0.8",
+    "cross-spawn": "^7.0.6",
+    "dompurify": "^3.4.11",
+    "undici": "^8.5.0"
   },
   "optionalDependencies": {
     "@next/swc-win32-x64-msvc": "^16.2.9"

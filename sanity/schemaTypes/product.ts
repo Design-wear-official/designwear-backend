@@ -265,6 +265,21 @@ export default defineType({
       ],
     }),
 
+    defineField({
+      name: 'designJson',
+      title: 'Design JSON',
+      type: 'text',
+      group: 'community',
+      description: 'Full serialised CustomDesign for lossless reconstruct / re-edit',
+    }),
+    defineField({
+      name: 'previewImage',
+      title: 'Design Preview Image',
+      type: 'image',
+      group: 'community',
+      description: 'Canvas thumbnail auto-captured at publish time',
+    }),
+
     // ── Metadata ─────────────────────────────────────────────────────────────
     defineField({
       name: 'status',

@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
             remixedFromVersion,
             lineage = [],
             tags = [],
+            designJson,
+            previewImageBase64,
         } = body
 
         if (!creatorHandle) {
@@ -36,7 +38,22 @@ export async function POST(req: NextRequest) {
         const sku = `REMIX-${Date.now()}`
         const designName = (title as string)?.trim() || `Remix by ${creatorHandle}`
 
-        // 1. Create Sanity document (lands as draft)
+        // 1a. Upload preview image to Sanity CDN if provided
+        let previewImageRef: object | null = null
+        if (previewImageBase64) {
+            try {
+                const buffer = Buffer.from(previewImageBase64 as string, 'base64')
+                const asset = await sanityClient.assets.upload('image', buffer, {
+                    contentType: 'image/png',
+                    filename: `preview-${Date.now()}.png`,
+                })
+                previewImageRef = { _type: 'image', asset: { _type: 'reference', _ref: asset._id } }
+            } catch (imgErr) {
+                console.warn('Preview image upload failed (non-fatal):', imgErr)
+            }
+        }
+
+        // 1b. Create Sanity document (lands as draft)
         const draft = await sanityClient.create({
             _type: 'product',
             name: designName,
@@ -60,6 +77,8 @@ export async function POST(req: NextRequest) {
             likeCount: 0,
             remixCount: 0,
             tags,
+            ...(designJson ? { designJson: JSON.stringify(designJson) } : {}),
+            ...(previewImageRef ? { previewImage: previewImageRef } : {}),
         })
 
         // 2. Publish: move from drafts.* → published document
@@ -106,6 +125,7 @@ export async function POST(req: NextRequest) {
                     likeCount: 0,
                     remixCount: 0,
                     tags,
+                    ...(designJson ? { designJson: JSON.stringify(designJson) } : {}),
                     syncedToDb: true,
                     syncedAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
