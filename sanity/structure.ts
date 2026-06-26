@@ -82,6 +82,10 @@ export const structure = (S: StructureBuilder) =>
             ])
         ),
       S.divider(),
+      S.documentTypeListItem('garmentTemplate')
+        .title('Garment Templates')
+        .icon(SparklesIcon),
+      S.divider(),
       S.documentTypeListItem('notificationTemplate')
         .title('Notification Templates')
         .icon(BellIcon),
