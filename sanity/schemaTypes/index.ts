@@ -10,6 +10,7 @@ import homeBanner from './homeBanner'
 import deal from './deal'
 import designTemplate from './designTemplate'
 import categoryQuickLink from './categoryQuickLink'
+import garmentTemplate from './garmentTemplate'
 
 export const schema = {
     types: [
@@ -29,5 +30,7 @@ export const schema = {
         deal,
         designTemplate,
         categoryQuickLink,
+        // Design Studio
+        garmentTemplate,
     ]
 }

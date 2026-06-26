@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
                 description: d.description || '',
                 price: d.price || 0,
                 imageUrl: d.imageUrl || (Array.isArray(d.images) && d.images.length > 0 ? d.images[0]?.asset?._ref : null),
+                previewImageUrl: d.previewImageUrl || null,
+                backPreviewImageUrl: d.backPreviewImageUrl || null,
                 categoryId: d.categoryId || d.category_id || null,
                 stockStatus: d.stockStatus || (d.stock > 0 ? 'inStock' : 'outOfStock'),
                 // Keep original fields for backwards compatibility

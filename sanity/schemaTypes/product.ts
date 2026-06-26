@@ -274,10 +274,17 @@ export default defineType({
     }),
     defineField({
       name: 'previewImage',
-      title: 'Design Preview Image',
+      title: 'Design Preview (Front)',
       type: 'image',
       group: 'community',
-      description: 'Canvas thumbnail auto-captured at publish time',
+      description: 'Front canvas thumbnail auto-captured at publish time',
+    }),
+    defineField({
+      name: 'backPreviewImage',
+      title: 'Design Preview (Back)',
+      type: 'image',
+      group: 'community',
+      description: 'Back canvas thumbnail auto-captured at publish time',
     }),
 
     // ── Metadata ─────────────────────────────────────────────────────────────

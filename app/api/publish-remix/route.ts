@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
             tags = [],
             designJson,
             previewImageBase64,
+            backPreviewImageBase64,
         } = body
 
         if (!creatorHandle) {
@@ -38,8 +39,12 @@ export async function POST(req: NextRequest) {
         const sku = `REMIX-${Date.now()}`
         const designName = (title as string)?.trim() || `Remix by ${creatorHandle}`
 
-        // 1a. Upload preview image to Sanity CDN if provided
+        // 1a. Upload preview images to Sanity CDN if provided.
+        // We keep both the Sanity image reference (for the CMS document) and the
+        // plain CDN URL (written to Firestore so the REST /products endpoint can
+        // return a usable URL without resolving asset references).
         let previewImageRef: object | null = null
+        let previewImageUrl: string | null = null
         if (previewImageBase64) {
             try {
                 const buffer = Buffer.from(previewImageBase64 as string, 'base64')
@@ -48,8 +53,25 @@ export async function POST(req: NextRequest) {
                     filename: `preview-${Date.now()}.png`,
                 })
                 previewImageRef = { _type: 'image', asset: { _type: 'reference', _ref: asset._id } }
+                previewImageUrl = asset.url ?? null
             } catch (imgErr) {
                 console.warn('Preview image upload failed (non-fatal):', imgErr)
+            }
+        }
+
+        let backPreviewImageRef: object | null = null
+        let backPreviewImageUrl: string | null = null
+        if (backPreviewImageBase64) {
+            try {
+                const buffer = Buffer.from(backPreviewImageBase64 as string, 'base64')
+                const asset = await sanityClient.assets.upload('image', buffer, {
+                    contentType: 'image/png',
+                    filename: `preview-back-${Date.now()}.png`,
+                })
+                backPreviewImageRef = { _type: 'image', asset: { _type: 'reference', _ref: asset._id } }
+                backPreviewImageUrl = asset.url ?? null
+            } catch (imgErr) {
+                console.warn('Back preview image upload failed (non-fatal):', imgErr)
             }
         }
 
@@ -79,6 +101,7 @@ export async function POST(req: NextRequest) {
             tags,
             ...(designJson ? { designJson: JSON.stringify(designJson) } : {}),
             ...(previewImageRef ? { previewImage: previewImageRef } : {}),
+            ...(backPreviewImageRef ? { backPreviewImage: backPreviewImageRef } : {}),
         })
 
         // 2. Publish: move from drafts.* → published document
@@ -126,6 +149,8 @@ export async function POST(req: NextRequest) {
                     remixCount: 0,
                     tags,
                     ...(designJson ? { designJson: JSON.stringify(designJson) } : {}),
+                    ...(previewImageUrl  ? { previewImageUrl  } : {}),
+                    ...(backPreviewImageUrl ? { backPreviewImageUrl } : {}),
                     syncedToDb: true,
                     syncedAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
