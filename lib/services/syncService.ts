@@ -25,6 +25,74 @@ export async function checkDocumentExists(sanityDocumentId: string): Promise<boo
     }
 }
 
+export type StockStatus = 'inStock' | 'lowStock' | 'outOfStock';
+
+/** Derives an inventory status label from a stock level and its low-stock threshold. */
+export function deriveStockStatus(stock: number, threshold: number): StockStatus {
+    if (stock <= 0) return 'outOfStock';
+    if (threshold > 0 && stock <= threshold) return 'lowStock';
+    return 'inStock';
+}
+
+interface InventoryInput {
+    name?: string;
+    sku?: string;
+    stock?: number;
+    lowStockThreshold?: number;
+}
+
+/**
+ * Upserts a dedicated inventory record (`inventory/{productId}`) in Firestore and,
+ * whenever the stock level changed since the previous value, appends an
+ * `inventoryMovements` audit entry — atomically, in one transaction.
+ *
+ * Called automatically from {@link syncProductToDatabase}, so inventory mirrors
+ * the catalog on every Sanity → Firestore product sync. Also reused by the
+ * `/api/inventory/backfill` reconcile endpoint.
+ */
+export async function upsertInventoryRecord(productId: string, product: InventoryInput): Promise<void> {
+    const newStock = product.stock ?? 0;
+    const threshold = product.lowStockThreshold ?? 0;
+    const invRef = db.collection('inventory').doc(productId);
+
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(invRef);
+        const prevStock: number | null = snap.exists ? (snap.data()?.stock ?? 0) : null;
+        const now = new Date().toISOString();
+
+        tx.set(invRef, {
+            productId,
+            sku: product.sku || '',
+            name: product.name || '',
+            stock: newStock,
+            lowStockThreshold: threshold,
+            status: deriveStockStatus(newStock, threshold),
+            updatedAt: now,
+            syncedAt: now,
+        }, { merge: true });
+
+        // Log a movement only when stock actually changed (or on first creation
+        // with a positive opening balance) so the audit trail stays meaningful.
+        const changed = prevStock === null ? newStock > 0 : newStock !== prevStock;
+        if (changed) {
+            const delta = newStock - (prevStock ?? 0);
+            tx.set(db.collection('inventoryMovements').doc(), {
+                productId,
+                type: delta >= 0 ? 'in' : 'out',
+                quantity: Math.abs(delta),
+                previousStock: prevStock ?? 0,
+                newStock,
+                reason: prevStock === null ? 'initial' : 'sync',
+                source: 'sanity-sync',
+                timestamp: now,
+                createdAt: now,
+            });
+        }
+    });
+
+    logger.info(`Inventory record upserted for ${productId} (stock=${newStock})`);
+}
+
 export async function syncProductToDatabase(sanityDocumentId: string): Promise<SyncResult> {
     try {
         const product = await client.fetch(
@@ -40,6 +108,7 @@ export async function syncProductToDatabase(sanityDocumentId: string): Promise<S
         lowStockThreshold,
         status,
         featured,
+        creatorHandle,
         "categoryId": category->_id,
         "categorySlug": category->slug.current,
         "supplierId": supplier->_id,
@@ -88,6 +157,19 @@ export async function syncProductToDatabase(sanityDocumentId: string): Promise<S
         }, { merge: true });
 
         logger.info(`Upserted product ${sanityDocumentId} into Firestore db`);
+
+        // Mirror stock into the dedicated inventory collection + audit movements.
+        // Only stocked catalog products are tracked — community/print-on-demand
+        // designs (those with a creatorHandle) carry no stock and are skipped.
+        // Non-fatal: an inventory failure shouldn't fail the product sync — the
+        // /api/inventory/backfill endpoint can repair any record that drifts.
+        if (!product.creatorHandle) {
+            try {
+                await upsertInventoryRecord(sanityDocumentId, product);
+            } catch (invErr) {
+                logger.error(`Inventory mirror failed for ${sanityDocumentId} (non-fatal):`, invErr);
+            }
+        }
 
         await logOperation('sync', 'product', sanityDocumentId, null);
         return { success: true, message: `Product ${sanityDocumentId} synced successfully` };
