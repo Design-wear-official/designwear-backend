@@ -2,12 +2,17 @@ import { initializeApp, getApps, cert, ServiceAccount } from 'firebase-admin/app
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getMessaging, Messaging } from 'firebase-admin/messaging';
+import { getStorage } from 'firebase-admin/storage';
 import { logger } from '../utils/logger';
 
 const FIREBASE_PROJECT_ID =
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
     process.env.FIREBASE_PROJECT_ID ||
     'designwear-731c9';
+
+const FIREBASE_STORAGE_BUCKET =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    'designwear-731c9.firebasestorage.app';
 
 export let firebaseReady = false;
 
@@ -119,6 +124,17 @@ export const messaging = new Proxy({} as Messaging, {
         return typeof value === 'function' ? value.bind(adminMessaging) : value;
     },
 });
+
+/// Returns the default Cloud Storage bucket. Throws if Admin isn't initialized.
+export function getBucket() {
+    if (!firebaseReady) {
+        throw new Error(
+            'Firebase Admin is not initialized. ' +
+            'Set FIREBASE_SERVICE_ACCOUNT_KEY in Vercel Environment Variables and redeploy.'
+        );
+    }
+    return getStorage().bucket(FIREBASE_STORAGE_BUCKET);
+}
 
 export async function connectDatabase(): Promise<void> {
     logger.info('Firestore Database connected');
