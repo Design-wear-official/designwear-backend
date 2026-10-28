@@ -97,6 +97,19 @@ Create the collection with exactly these fields (SethuCMS refuses unknown ones):
 `teamId`, `teamName`, `trackingId`, `carrier`. Give the token write access to this collection
 only. Delivered and cancelled orders are final: changes made to them in SethuCMS are ignored.
 
+## Notifications
+
+Every order step (placed, paid, confirmed, packed, shipped, delivered, cancelled) tells the
+customer in three places: the in-app inbox (`GET /v1/notifications`, `POST /v1/notifications/read`),
+an email (through `MAIL_WEBHOOK_URL`), and their phones.
+
+- **Phones:** the app registers its Firebase token with `POST /v1/me/devices`. Set
+  `FCM_SERVICE_ACCOUNT` (base64 of a service-account key for the Firebase project) to turn push on.
+- **The moment the business changes an order:** create a SethuCMS webhook (`POST /v1/admin/webhooks`
+  with `url` = `https://<api>/v1/hooks/sethucms`, `events` = `["record.updated"]`) and set its
+  `whsec_` secret as `SETHUCMS_WEBHOOK_SECRET`. Deliveries are signature-checked. Without it the
+  customer is notified the next time they open their orders.
+
 ## Hosting
 
 Two ways to run it, from the same code:

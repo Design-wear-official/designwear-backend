@@ -47,6 +47,12 @@ export function loadConfig(env = process.env) {
       token: env.SETHUCMS_STORE_TOKEN ?? '',
       collection: env.SETHUCMS_STORE_COLLECTION ?? 'dw_store',
     },
+    // Phone notifications (Firebase Cloud Messaging). A service-account key for the
+    // Firebase project, as JSON text or base64. Separate from FIREBASE_SERVICE_ACCOUNT,
+    // which would also switch the database to Firestore.
+    fcm: { credentials: parseServiceAccount(env.FCM_SERVICE_ACCOUNT) },
+    // Shared secret (whsec_...) SethuCMS signs its webhooks with. Unset = no webhook route.
+    webhookSecret: env.SETHUCMS_WEBHOOK_SECRET ?? '',
     // Where orders are mirrored in SethuCMS. Needs its own token that can write
     // only the orders collection; the catalog token stays read-only.
     ordersSync: {

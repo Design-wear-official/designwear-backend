@@ -81,6 +81,8 @@ export function registerOrderRoutes(router, ctx) {
       await store.put('carts', user.id, { id: user.id, lines: [] });
     }
     await ctx.syncOrder(order);
+    // Online orders are announced once the payment goes through.
+    if (cashOnDelivery) await ctx.notifyOrder(order, 'placed');
     return { status: 201, body: { order } };
   });
 
@@ -112,6 +114,7 @@ export function registerOrderRoutes(router, ctx) {
     order.history = [...(order.history ?? []), { status: 'cancelled', at: new Date(now()).toISOString(), note: 'Cancelled by customer' }];
     await store.put('orders', order.id, order);
     await ctx.syncOrder(order);
+    await ctx.notifyOrder(order, 'cancelled');
     return { status: 200, body: { order } };
   });
 }

@@ -4,7 +4,9 @@ import { randomBytes } from 'node:crypto';
 
 import { createFirebaseVerifier } from './firebase_token.js';
 import { createLogger } from './logger.js';
+import { createNotifier, orderMessage } from './notifications.js';
 import { NullOrderSync } from './order_sync.js';
+import { NullPush } from './push.js';
 import { RateLimiter, safeEqual, signToken, verifyToken } from './security.js';
 import { HttpError, bad } from './validate.js';
 
@@ -23,6 +25,7 @@ export function createContext(deps) {
     ai,
     mailer,
     orderSync = new NullOrderSync(),
+    push = new NullPush(),
     logger = createLogger({ sink: () => {} }),
     clientLogger = logger,
     now = () => Date.now(),
@@ -82,8 +85,8 @@ export function createContext(deps) {
     return { token, user: publicUser(user) };
   }
 
-  // Reads a JSON object body, refusing anything larger than `maxBytes`.
-  async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+  // The body exactly as sent (a webhook signature covers these exact bytes).
+  async function readRaw(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
     const chunks = [];
     let size = 0;
     for await (const chunk of req) {
@@ -93,10 +96,16 @@ export function createContext(deps) {
       }
       chunks.push(chunk);
     }
-    if (size === 0) return {};
+    return Buffer.concat(chunks).toString('utf8');
+  }
+
+  // Reads a JSON object body, refusing anything larger than `maxBytes`.
+  async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+    const text = await readRaw(req, maxBytes);
+    if (text === '') return {};
     let body;
     try {
-      body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      body = JSON.parse(text);
     } catch {
       throw bad('invalid_json', 'Body must be a JSON object.');
     }
@@ -117,18 +126,31 @@ export function createContext(deps) {
     }
   }
 
+  const notifier = createNotifier({ store, mailer, push, logger, now });
+
+  // Tells the order's owner about a step: inbox, email and phone.
+  async function notifyOrder(order, status = order.status, extra = {}) {
+    const user = await store.get('users', order.userId);
+    if (!user) return;
+    const { title, body } = orderMessage(order, extra.paid ? 'paid' : status);
+    await notifier.notify(user, { type: `order.${status}`, title, body, orderId: order.id });
+  }
+
   // Applies what the business set in SethuCMS (status, tracking) to the order.
   async function refreshOrder(order) {
     if (!orderSync.enabled) return order;
     try {
       const remote = await orderSync.pull(order);
       if (!remote || (remote.status === order.status && !remote.tracking)) return order;
-      if (remote.status !== order.status) {
+      const changed = remote.status !== order.status;
+      if (changed) {
         order.status = remote.status;
         order.history = [...(order.history ?? []), { status: remote.status, at: new Date(now()).toISOString() }];
       }
       if (remote.tracking) order.tracking = remote.tracking;
       await store.put('orders', order.id, order);
+      // The business moved the order: tell the customer (once, because the change is saved first).
+      if (changed) await notifyOrder(order, remote.status);
     } catch (error) {
       logger.error(`Order refresh failed for ${order.id}: ${error.message}`, error);
     }
@@ -171,7 +193,7 @@ export function createContext(deps) {
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
     ipOf, limit, authed, optionalUser, issue, readBody, requireAdmin,
-    syncOrder, refreshOrder,
+    syncOrder, refreshOrder, notifier, notifyOrder, readRaw,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }

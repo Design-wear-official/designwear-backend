@@ -7,6 +7,7 @@ import { loadConfig } from './config.js';
 import { FileSink, createLogger } from './logger.js';
 import { WebhookMailer } from './mailer.js';
 import { CmsOrderSync } from './order_sync.js';
+import { FcmPush, NullPush } from './push.js';
 import { createStore } from './store.js';
 
 export async function buildApp(env = process.env) {
@@ -35,6 +36,7 @@ export async function buildApp(env = process.env) {
     catalog: new CmsCatalog(config.cms),
     ai: new AiProvider(config),
     orderSync: new CmsOrderSync(config.ordersSync),
+    push: config.fcm.credentials ? new FcmPush(config.fcm) : new NullPush(),
     mailer: new WebhookMailer(config.mailWebhookUrl, fetch, {
       printUnsent: !config.production,
     }),

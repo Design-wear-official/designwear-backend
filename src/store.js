@@ -1,6 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { createSign, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
+
+import { createAccessTokenSource } from './google_auth.js';
 
 /**
  * Small document store: collections of JSON documents keyed by id.
@@ -133,55 +135,24 @@ export class FirestoreStore {
     this.fetch = fetchImpl;
     this.now = now;
     this.root = `https://firestore.googleapis.com/v1/projects/${credentials.project_id}/databases/(default)/documents`;
-    this.accessToken = null;
-    this.accessExpires = 0;
+    this.token = createAccessTokenSource({
+      credentials,
+      scope: 'https://www.googleapis.com/auth/datastore',
+      fetchImpl,
+      now,
+      errorPrefix: 'firestore_auth_error',
+    });
   }
 
   async load() {
     return this;
   }
 
-  // Service-account login: sign a short JWT, trade it for an access token, and
-  // reuse that token until shortly before it expires.
-  async #token() {
-    if (this.accessToken && this.now() < this.accessExpires - 60_000) return this.accessToken;
-
-    const issued = Math.floor(this.now() / 1000);
-    const part = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
-    const unsigned = `${part({ alg: 'RS256', typ: 'JWT' })}.${part({
-      iss: this.credentials.client_email,
-      scope: 'https://www.googleapis.com/auth/datastore',
-      aud: 'https://oauth2.googleapis.com/token',
-      iat: issued,
-      exp: issued + 3600,
-    })}`;
-    const signature = createSign('RSA-SHA256')
-      .update(unsigned)
-      .sign(this.credentials.private_key)
-      .toString('base64url');
-
-    const response = await this.fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion: `${unsigned}.${signature}`,
-      }),
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok || !body.access_token) {
-      throw new Error(`firestore_auth_error:${response.status}`);
-    }
-    this.accessToken = body.access_token;
-    this.accessExpires = this.now() + (body.expires_in ?? 3600) * 1000;
-    return this.accessToken;
-  }
-
   async #call(method, url, body) {
     const response = await this.fetch(url, {
       method,
       headers: {
-        authorization: `Bearer ${await this.#token()}`,
+        authorization: `Bearer ${await this.token()}`,
         'content-type': 'application/json',
       },
       body: body === undefined ? undefined : JSON.stringify(body),

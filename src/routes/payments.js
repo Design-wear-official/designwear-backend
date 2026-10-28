@@ -79,6 +79,7 @@ export function registerPaymentRoutes(router, ctx) {
     await store.put('orders', order.id, order);
     await store.put('carts', user.id, { id: user.id, lines: [] });
     await ctx.syncOrder(order);
+    await ctx.notifyOrder(order, 'placed', { paid: true });
 
     return { status: 200, body: { order } };
   });

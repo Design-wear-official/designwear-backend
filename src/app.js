@@ -11,6 +11,8 @@ import { registerCartRoutes } from './routes/cart.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerChallengeRoutes } from './routes/challenges.js';
 import { registerDesignRoutes } from './routes/designs.js';
+import { registerHookRoutes } from './routes/hooks.js';
+import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerOrderRoutes } from './routes/orders.js';
 import { registerPaymentRoutes } from './routes/payments.js';
 import { registerSystemRoutes } from './routes/system.js';
@@ -25,6 +27,8 @@ export function createApp(deps) {
   registerAccountRoutes(router, ctx);
   registerCartRoutes(router, ctx);
   registerOrderRoutes(router, ctx);
+  registerNotificationRoutes(router, ctx);
+  registerHookRoutes(router, ctx);
   registerPaymentRoutes(router, ctx);
   registerDesignRoutes(router, ctx, presenters);
   registerChallengeRoutes(router, ctx, presenters);
