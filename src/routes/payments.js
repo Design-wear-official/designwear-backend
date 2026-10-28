@@ -75,6 +75,7 @@ export function registerPaymentRoutes(router, ctx) {
 
     order.payment = { ...order.payment, status: 'paid', paymentId: String(body.paymentId) };
     order.status = 'placed';
+    order.history = [...(order.history ?? []), { status: 'placed', at: new Date(ctx.now()).toISOString(), note: 'Payment received' }];
     await store.put('orders', order.id, order);
     await store.put('carts', user.id, { id: user.id, lines: [] });
 

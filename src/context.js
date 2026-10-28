@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 
 import { createFirebaseVerifier } from './firebase_token.js';
 import { createLogger } from './logger.js';
-import { RateLimiter, signToken, verifyToken } from './security.js';
+import { RateLimiter, safeEqual, signToken, verifyToken } from './security.js';
 import { HttpError, bad } from './validate.js';
 
 const SESSION_TTL_SECONDS = 7 * 24 * 3600;
@@ -103,6 +103,17 @@ export function createContext(deps) {
     return body;
   }
 
+  // Business-owner access: a long secret token, and the routes do not exist at
+  // all (404) until one is configured.
+  function requireAdmin(req) {
+    if (!config.adminToken) throw new HttpError(404, 'not_found');
+    limit(`admin:${ipOf(req)}`, 120, 60_000);
+    const given = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
+    if (!safeEqual(given, config.adminToken)) {
+      throw new HttpError(401, 'unauthenticated', 'Admin token required.');
+    }
+  }
+
   // Accounts are found through small index collections (email -> user id,
   // Firebase uid -> user id) so a lookup never scans every user.
   async function findUserByEmail(email) {
@@ -127,7 +138,7 @@ export function createContext(deps) {
 
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
-    ipOf, limit, authed, optionalUser, issue, readBody,
+    ipOf, limit, authed, optionalUser, issue, readBody, requireAdmin,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }

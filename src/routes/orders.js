@@ -37,6 +37,7 @@ export function registerOrderRoutes(router, ctx) {
       },
       status: cashOnDelivery ? 'placed' : 'awaiting_payment',
     };
+    order.history = [{ status: order.status, at: order.createdAt }];
     await store.put('orders', order.id, order);
 
     // Online orders keep the cart until the payment is verified.
@@ -65,6 +66,7 @@ export function registerOrderRoutes(router, ctx) {
     }
 
     order.status = 'cancelled';
+    order.history = [...(order.history ?? []), { status: 'cancelled', at: new Date(now()).toISOString(), note: 'Cancelled by customer' }];
     await store.put('orders', order.id, order);
     return { status: 200, body: { order } };
   });

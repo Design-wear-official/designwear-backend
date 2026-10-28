@@ -58,6 +58,7 @@ export function createHandler({ ctx, router }) {
         'content-type': raw.type,
         'cache-control': 'public, max-age=86400',
         'cross-origin-resource-policy': 'cross-origin',
+        ...raw.headers,
       });
       res.end(raw.body);
     }

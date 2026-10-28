@@ -1,12 +1,11 @@
 // Weekly design challenges.
-import { safeEqual } from '../security.js';
 import * as v from '../validate.js';
 import { HttpError, bad } from '../validate.js';
 
 const MAX_ENTRIES_SHOWN = 50;
 
 export function registerChallengeRoutes(router, ctx, presenters) {
-  const { config, store } = ctx;
+  const { store } = ctx;
   const { publicDesign, isOpen, entriesOf, publicChallenge } = presenters;
 
   router.route('GET', '/v1/challenges/current', async () => {
@@ -40,13 +39,7 @@ export function registerChallengeRoutes(router, ctx, presenters) {
 
   // Admin: only exists when DESIGNWEAR_ADMIN_TOKEN is set.
   router.route('PUT', '/v1/admin/challenges/:challengeId', async ({ req, params }) => {
-    if (!config.adminToken) throw new HttpError(404, 'not_found');
-    ctx.limit(`admin:${ctx.ipOf(req)}`, 30, 60_000);
-
-    const given = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
-    if (!safeEqual(given, config.adminToken)) {
-      throw new HttpError(401, 'unauthenticated', 'Admin token required.');
-    }
+    ctx.requireAdmin(req);
     if (!/^[a-z0-9-]{2,40}$/.test(params.challengeId)) {
       throw bad('invalid_id', 'Use lowercase letters, numbers and dashes.');
     }
