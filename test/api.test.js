@@ -112,6 +112,21 @@ describe('orders', () => {
     assert.equal((await call('GET', '/v1/orders', { token: t })).body.orders.length, 1);
   });
 
+  it('refuses more units than are in stock, counting every size of the product', async () => {
+    const t = await signUp('Greedy');
+    const order = (lines) => call('POST', '/v1/orders', { token: t, body: { address, lines } });
+    // p1 has 5 in stock.
+    const tooMany = await order([{ productId: 'p1', size: 'M', quantity: 6 }]);
+    assert.equal(tooMany.body.error.code, 'insufficient_stock');
+    assert.match(tooMany.body.error.message, /Only 5 of Graphic Tee left/);
+    const acrossSizes = await order([
+      { productId: 'p1', size: 'M', quantity: 3 },
+      { productId: 'p1', size: 'L', quantity: 3 },
+    ]);
+    assert.equal(acrossSizes.body.error.code, 'insufficient_stock');
+    assert.equal((await order([{ productId: 'p1', size: 'M', quantity: 5 }])).status, 201);
+  });
+
   it('rejects out of stock, unknown products, bad sizes and bad addresses', async () => {
     const t = await signUp('Picky');
     const order = (lines, addr = address) => call('POST', '/v1/orders', { token: t, body: { address: addr, lines } });
