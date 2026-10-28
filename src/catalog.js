@@ -24,10 +24,27 @@ export function normaliseProduct(r) {
 /** What the shop sells: originals with a price. Remix records stay in the database untouched. */
 export const isSellable = (p) => !p.remix && Number.isFinite(p.price) && p.price > 0;
 
+/**
+ * A local team: has the T-shirts, serves some PIN codes, and delivers there.
+ * SethuCMS collection `teams`: id, name, phone, pins (list or comma-separated text),
+ * active (defaults to true).
+ */
+export function normaliseTeam(r) {
+  const pins = Array.isArray(r.pins) ? r.pins : String(r.pins ?? '').split(/[\s,]+/);
+  return {
+    id: String(r.id ?? r._id ?? ''),
+    name: String(r.name ?? r.title ?? ''),
+    phone: String(r.phone ?? ''),
+    pins: pins.map((p) => String(p).trim()).filter((p) => /^\d{6}$/.test(p)),
+    active: r.active !== false,
+  };
+}
+
 export class CmsCatalog {
   constructor({ url, connectionId, token }, fetchImpl = fetch, ttlMs = 60_000) {
     Object.assign(this, { url, connectionId, token, fetchImpl, ttlMs });
-    this.cache = null;
+    this.caches = new Map(); // collection -> { at, items }
+    this.inflight = new Map();
   }
 
   get configured() {
@@ -35,15 +52,44 @@ export class CmsCatalog {
   }
 
   async products() {
-    if (!this.configured) return [];
-    if (this.cache && Date.now() - this.cache.at < this.ttlMs) return this.cache.items;
-    // One refresh at a time: concurrent requests on a cold or expired cache
-    // share it instead of each paging through the whole catalog.
-    this.inflight ??= this.#refresh().finally(() => { this.inflight = null; });
-    return this.inflight;
+    const records = await this.#collection('products');
+    return records.map(normaliseProduct).filter((p) => p.id && isSellable(p));
   }
 
-  async #refresh() {
+  async product(id) {
+    return (await this.products()).find((p) => p.id === id) ?? null;
+  }
+
+  /** Active local teams. Empty when the `teams` collection is missing or unused. */
+  async teams() {
+    const records = await this.#collection('teams', { optional: true });
+    return records.map(normaliseTeam).filter((t) => t.id && t.active);
+  }
+
+  /**
+   * Units of a product a team has, from SethuCMS collection `team_stock`
+   * (teamId, productId, quantity). A missing row means none.
+   */
+  async teamStock(teamId, productId) {
+    const rows = await this.#collection('team_stock', { optional: true });
+    const row = rows.find((r) => String(r.teamId) === teamId && String(r.productId) === productId);
+    return Math.max(0, Number(row?.quantity ?? 0) || 0);
+  }
+
+  // Raw records of one collection, cached briefly. One refresh at a time:
+  // concurrent requests on a cold cache share it instead of each paging.
+  async #collection(name, { optional = false } = {}) {
+    if (!this.configured) return [];
+    const cached = this.caches.get(name);
+    if (cached && Date.now() - cached.at < this.ttlMs) return cached.items;
+    if (!this.inflight.has(name)) {
+      const refresh = this.#refresh(name, optional).finally(() => this.inflight.delete(name));
+      this.inflight.set(name, refresh);
+    }
+    return this.inflight.get(name);
+  }
+
+  async #refresh(name, optional) {
     const items = [];
     let cursor = null;
     for (let page = 0; page < 20; page++) {
@@ -51,20 +97,18 @@ export class CmsCatalog {
       if (cursor) q.set('cursor', cursor);
       const connection = encodeURIComponent(this.connectionId);
       const res = await this.fetchImpl(
-        `${this.url}/v1/connections/${connection}/collections/products/records?${q}`,
+        `${this.url}/v1/connections/${connection}/collections/${encodeURIComponent(name)}/records?${q}`,
         { headers: { authorization: `Bearer ${this.token}` }, redirect: 'error' },
       );
+      // A collection that is not set up yet simply has no records.
+      if (optional && (res.status === 404 || res.status === 403)) break;
       if (!res.ok) throw new Error(`catalog_unavailable:${res.status}`);
       const body = await res.json();
-      items.push(...body.data.map(normaliseProduct).filter((p) => p.id && isSellable(p)));
+      items.push(...body.data);
       cursor = body.nextCursor;
       if (!cursor) break;
     }
-    this.cache = { at: Date.now(), items };
+    this.caches.set(name, { at: Date.now(), items });
     return items;
-  }
-
-  async product(id) {
-    return (await this.products()).find((p) => p.id === id) ?? null;
   }
 }

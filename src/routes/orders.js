@@ -1,6 +1,7 @@
 // Placing, listing, and cancelling orders.
 import { randomBytes } from 'node:crypto';
 
+import { createFulfilment } from '../fulfilment.js';
 import { createPricing } from '../pricing.js';
 import * as v from '../validate.js';
 import { HttpError, bad } from '../validate.js';
@@ -10,13 +11,19 @@ const CANCELLABLE = ['placed', 'awaiting_payment'];
 export function registerOrderRoutes(router, ctx) {
   const { config, store, now } = ctx;
   const pricing = createPricing(ctx);
+  const fulfilment = createFulfilment(ctx);
 
   router.route('POST', '/v1/orders', async ({ req }) => {
     const user = await ctx.authed(req);
     ctx.limit(`order:${user.id}`, 20, 3600_000);
     const body = await ctx.readBody(req);
 
-    const { printDesigns, ...priced } = await pricing.priceLines(user.id, body.lines);
+    const address = v.address(body.address);
+    const { team, priced: pricedWithDesigns } = await fulfilment.assign({
+      pin: address.pin,
+      price: (options) => pricing.priceLines(user.id, body.lines, options),
+    });
+    const { printDesigns, ...priced } = pricedWithDesigns;
     const method = body.paymentMethod === 'razorpay' ? 'razorpay' : 'cod';
     const cashOnDelivery = method === 'cod';
 
@@ -30,7 +37,8 @@ export function registerOrderRoutes(router, ctx) {
       userId: user.id,
       createdAt: new Date(now()).toISOString(),
       ...priced,
-      address: v.address(body.address),
+      address,
+      team: team && { id: team.id, name: team.name, phone: team.phone },
       payment: {
         method,
         status: cashOnDelivery ? 'pay_on_delivery' : 'pending',

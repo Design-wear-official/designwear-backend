@@ -1,4 +1,5 @@
 // The public catalog: products, product images, and search.
+import { createFulfilment } from '../fulfilment.js';
 import { HttpError } from '../validate.js';
 
 const IMAGE_CACHE_TTL_MS = 3600_000;
@@ -36,6 +37,7 @@ function searchScore(product, terms) {
 
 export function registerCatalogRoutes(router, ctx) {
   const { config, catalog, now, fetchImpl } = ctx;
+  const fulfilment = createFulfilment(ctx);
 
   // Product images for browsers. The image CDN only allows origins on its own
   // list, so a web app on another origin gets 403; the API fetches the image
@@ -109,6 +111,14 @@ export function registerCatalogRoutes(router, ctx) {
       }
     }
     return { status: 200, raw: { type: hit.type, body: hit.body } };
+  });
+
+  // Can a local team deliver to this PIN code? Asked at checkout, before ordering.
+  router.route('GET', '/v1/serviceability', async ({ req, query }) => {
+    ctx.limit(`pin:${ctx.ipOf(req)}`, 120, 60_000);
+    const pin = String(query.get('pin') ?? '');
+    if (!/^\d{6}$/.test(pin)) throw new HttpError(400, 'invalid_pin', 'PIN code must be 6 digits.');
+    return { status: 200, body: await fulfilment.serviceability(pin) };
   });
 
   router.route('GET', '/v1/search', async ({ query }) => {

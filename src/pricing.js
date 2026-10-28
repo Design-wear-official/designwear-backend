@@ -26,7 +26,9 @@ export function createPricing({ store, catalog }) {
   }
 
   // Validates and prices order lines; throws if anything is unavailable.
-  async function priceLines(userId, inputLines) {
+  // `stockOf(product)` says how many are available; by default the catalog's own
+  // count, or a local team's when orders are routed to teams.
+  async function priceLines(userId, inputLines, { stockOf = (p) => p.stock } = {}) {
     const priced = [];
     const requested = new Map(); // productId -> units asked for so far
     const printDesigns = new Map(); // line index -> the design to print
@@ -46,14 +48,15 @@ export function createPricing({ store, catalog }) {
       if (!product || !Number.isFinite(product.price)) {
         throw bad('unknown_product', `Product ${line.productId} is not available.`);
       }
-      if (product.stock <= 0) {
+      const available = await stockOf(product);
+      if (available <= 0) {
         throw bad('out_of_stock', `${product.title} is out of stock.`);
       }
       // Stock is per product, so sizes of the same product share it.
       const wanted = (requested.get(product.id) ?? 0) + line.quantity;
       requested.set(product.id, wanted);
-      if (wanted > product.stock) {
-        throw bad('insufficient_stock', `Only ${product.stock} of ${product.title} left.`);
+      if (wanted > available) {
+        throw bad('insufficient_stock', `Only ${available} of ${product.title} left.`);
       }
       priced.push({
         ...line,
