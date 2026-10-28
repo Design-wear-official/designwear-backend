@@ -41,7 +41,7 @@ export function normaliseTeam(r) {
 }
 
 export class CmsCatalog {
-  constructor({ url, connectionId, token }, fetchImpl = fetch, ttlMs = 60_000) {
+  constructor({ url, connectionId, token }, fetchImpl = fetch, ttlMs = 300_000) {
     Object.assign(this, { url, connectionId, token, fetchImpl, ttlMs });
     this.caches = new Map(); // collection -> { at, items }
     this.inflight = new Map();
@@ -93,7 +93,7 @@ export class CmsCatalog {
     const items = [];
     let cursor = null;
     for (let page = 0; page < 20; page++) {
-      const q = new URLSearchParams({ limit: '100' });
+      const q = new URLSearchParams({ limit: '500' });
       if (cursor) q.set('cursor', cursor);
       const connection = encodeURIComponent(this.connectionId);
       const res = await this.fetchImpl(
