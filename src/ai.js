@@ -8,6 +8,9 @@ const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models
 const MAX_GARMENT_BYTES = 6_000_000;
 const MAX_DESIGN_ELEMENTS = 60;
 
+// Asks a general model (not only the dedicated image ones) to answer with a picture.
+const IMAGE_OUTPUT = { responseModalities: ['TEXT', 'IMAGE'] };
+
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // The image type from the file's first bytes (never from a client-supplied name).
@@ -96,6 +99,7 @@ export class AiProvider {
       `("${product.title}"). Keep their face, pose and background unchanged.`;
 
     const response = await this.generate(this.gemini.imageModel, {
+      generationConfig: IMAGE_OUTPUT,
       contents: [
         {
           parts: [
@@ -187,6 +191,7 @@ export class AiProvider {
       `no text: ${prompt}`;
 
     const response = await this.generate(this.gemini.imageModel, {
+      generationConfig: IMAGE_OUTPUT,
       contents: [{ parts: [{ text: instruction }] }],
     });
     if (!response.ok) {

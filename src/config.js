@@ -61,7 +61,7 @@ export function loadConfig(env = process.env) {
       // Chat uses Gemini 4 Argon. Confirm the ID in Google AI Studio's model list.
       model: env.GEMINI_MODEL ?? 'gemini-4-argon',
       // Try-on must return an image, so it has its own model setting.
-      imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-2.5-flash-image',
+      imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-4-argon',
     },
     mailWebhookUrl: env.MAIL_WEBHOOK_URL ?? '',
     // Enables /v1/admin/* (create weekly challenges). Unset = those routes don't exist.
