@@ -80,13 +80,16 @@ export function registerOrderRoutes(router, ctx) {
     if (cashOnDelivery) {
       await store.put('carts', user.id, { id: user.id, lines: [] });
     }
+    await ctx.syncOrder(order);
     return { status: 201, body: { order } };
   });
 
   router.route('GET', '/v1/orders', async ({ req }) => {
     const user = await ctx.authed(req);
     const mine = await store.list('orders', (o) => o.userId === user.id);
-    const orders = mine.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // Orders still moving may have been updated by the business in SethuCMS.
+    const recent = mine.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const orders = await Promise.all(recent.map((o, i) => (i < 10 ? ctx.refreshOrder(o) : o)));
     return { status: 200, body: { orders } };
   });
 
@@ -108,6 +111,7 @@ export function registerOrderRoutes(router, ctx) {
     order.status = 'cancelled';
     order.history = [...(order.history ?? []), { status: 'cancelled', at: new Date(now()).toISOString(), note: 'Cancelled by customer' }];
     await store.put('orders', order.id, order);
+    await ctx.syncOrder(order);
     return { status: 200, body: { order } };
   });
 }

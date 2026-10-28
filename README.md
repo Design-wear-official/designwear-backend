@@ -82,6 +82,21 @@ curl -X PUT "$API/v1/admin/challenges/monsoon" \
 The app's Home banner shows the open challenge (latest start) with its real entry count and time
 left. Designs published from the challenge page become entries, ranked by likes.
 
+## Orders in SethuCMS (dashboards and status updates)
+
+Set `SETHUCMS_ORDERS_TOKEN` and each order is copied into a SethuCMS collection (`orders` by
+default) when it is placed, paid or cancelled. The business then sees orders, dashboards and
+can change an order's `status` (and `trackingId`, `carrier`) there; the customer's My orders
+screen picks the change up. If SethuCMS is down the customer's order still goes through.
+
+Create the collection with exactly these fields (SethuCMS refuses unknown ones):
+`id` (text, key), `createdAt`, `updatedAt` (date and time), `status` (text: `awaiting_payment`,
+`placed`, `confirmed`, `packed`, `shipped`, `delivered`, `cancelled`), `customerName`,
+`customerEmail`, `customerPhone`, `address`, `city`, `state`, `pin`, `items` (long text),
+`itemCount` (integer), `subtotal`, `tax`, `total` (decimal), `paymentMethod`, `paymentStatus`,
+`teamId`, `teamName`, `trackingId`, `carrier`. Give the token write access to this collection
+only. Delivered and cancelled orders are final: changes made to them in SethuCMS are ignored.
+
 ## Hosting
 
 Two ways to run it, from the same code:

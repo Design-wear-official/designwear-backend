@@ -39,6 +39,14 @@ export function loadConfig(env = process.env) {
       connectionId: env.SETHUCMS_CONNECTION_ID ?? '',
       token: env.SETHUCMS_TOKEN ?? '',
     },
+    // Where orders are mirrored in SethuCMS. Needs its own token that can write
+    // only the orders collection; the catalog token stays read-only.
+    ordersSync: {
+      url: (env.SETHUCMS_URL ?? '').replace(/\/+$/, ''),
+      connectionId: env.SETHUCMS_ORDERS_CONNECTION_ID ?? env.SETHUCMS_CONNECTION_ID ?? '',
+      token: env.SETHUCMS_ORDERS_TOKEN ?? '',
+      collection: env.SETHUCMS_ORDERS_COLLECTION ?? 'orders',
+    },
     razorpay: { keyId: env.RAZORPAY_KEY_ID ?? '', keySecret: env.RAZORPAY_KEY_SECRET ?? '' },
     gemini: {
       apiKey: env.GEMINI_API_KEY ?? '',

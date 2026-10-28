@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 
 import { createFirebaseVerifier } from './firebase_token.js';
 import { createLogger } from './logger.js';
+import { NullOrderSync } from './order_sync.js';
 import { RateLimiter, safeEqual, signToken, verifyToken } from './security.js';
 import { HttpError, bad } from './validate.js';
 
@@ -21,6 +22,7 @@ export function createContext(deps) {
     catalog,
     ai,
     mailer,
+    orderSync = new NullOrderSync(),
     logger = createLogger({ sink: () => {} }),
     clientLogger = logger,
     now = () => Date.now(),
@@ -103,6 +105,36 @@ export function createContext(deps) {
     return body;
   }
 
+  // Copies the order to SethuCMS. The customer never waits on it failing: a
+  // problem is logged and the order is still saved here.
+  async function syncOrder(order) {
+    if (!orderSync.enabled) return;
+    try {
+      const customer = await store.get('users', order.userId);
+      await orderSync.push(order, customer);
+    } catch (error) {
+      logger.error(`Order sync failed for ${order.id}: ${error.message}`, error);
+    }
+  }
+
+  // Applies what the business set in SethuCMS (status, tracking) to the order.
+  async function refreshOrder(order) {
+    if (!orderSync.enabled) return order;
+    try {
+      const remote = await orderSync.pull(order);
+      if (!remote || (remote.status === order.status && !remote.tracking)) return order;
+      if (remote.status !== order.status) {
+        order.status = remote.status;
+        order.history = [...(order.history ?? []), { status: remote.status, at: new Date(now()).toISOString() }];
+      }
+      if (remote.tracking) order.tracking = remote.tracking;
+      await store.put('orders', order.id, order);
+    } catch (error) {
+      logger.error(`Order refresh failed for ${order.id}: ${error.message}`, error);
+    }
+    return order;
+  }
+
   // Business-owner access: a long secret token, and the routes do not exist at
   // all (404) until one is configured.
   function requireAdmin(req) {
@@ -139,6 +171,7 @@ export function createContext(deps) {
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
     ipOf, limit, authed, optionalUser, issue, readBody, requireAdmin,
+    syncOrder, refreshOrder,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }

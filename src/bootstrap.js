@@ -6,6 +6,7 @@ import { CmsCatalog } from './catalog.js';
 import { loadConfig } from './config.js';
 import { FileSink, createLogger } from './logger.js';
 import { WebhookMailer } from './mailer.js';
+import { CmsOrderSync } from './order_sync.js';
 import { createStore } from './store.js';
 
 export async function buildApp(env = process.env) {
@@ -33,6 +34,7 @@ export async function buildApp(env = process.env) {
     store,
     catalog: new CmsCatalog(config.cms),
     ai: new AiProvider(config),
+    orderSync: new CmsOrderSync(config.ordersSync),
     mailer: new WebhookMailer(config.mailWebhookUrl, fetch, {
       printUnsent: !config.production,
     }),
