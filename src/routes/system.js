@@ -44,7 +44,7 @@ export function registerSystemRoutes(router, ctx) {
     const short = (value) => String(value ?? '').slice(0, 20);
 
     clientLogger.client(entries, {
-      userId: ctx.optionalUser(req)?.id,
+      userId: (await ctx.optionalUser(req))?.id,
       app: {
         version: short(app.version),
         flavour: short(app.flavour),

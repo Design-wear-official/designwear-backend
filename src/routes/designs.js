@@ -19,10 +19,10 @@ export function registerDesignRoutes(router, ctx, presenters) {
 
   // The challenge a new design enters, if it names one. Designs only enter a
   // challenge when first published into one that is open.
-  function challengeForNewDesign(body) {
+  async function challengeForNewDesign(body) {
     if (!body.challengeId) return null;
 
-    const challenge = store.get('challenges', String(body.challengeId));
+    const challenge = await store.get('challenges', String(body.challengeId));
     if (!challenge || !isOpen(challenge)) {
       throw bad('challenge_closed', 'That challenge is not open.');
     }
@@ -34,7 +34,7 @@ export function registerDesignRoutes(router, ctx, presenters) {
 
   // Remixing records where the design came from and bumps the parent's count.
   async function remixOf(parentId) {
-    const parent = store.get('designs', String(parentId));
+    const parent = await store.get('designs', String(parentId));
     if (!parent || !parent.published) {
       throw bad('unknown_design', 'The design you are remixing is not available.');
     }
@@ -50,14 +50,14 @@ export function registerDesignRoutes(router, ctx, presenters) {
   }
 
   router.route('POST', '/v1/designs', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     ctx.limit(`design:${user.id}`, 60, 3600_000);
     const body = await ctx.readBody(req, DESIGN_BODY_MAX_BYTES);
 
     const garment = v.garmentName(body.garment ?? '');
     if (!(garment in v.GARMENT_PRICES)) throw bad('invalid_garment');
 
-    const existing = body.id ? store.get('designs', String(body.id)) : null;
+    const existing = body.id ? await store.get('designs', String(body.id)) : null;
     if (existing && existing.ownerId !== user.id) {
       throw new HttpError(403, 'forbidden');
     }
@@ -67,7 +67,7 @@ export function registerDesignRoutes(router, ctx, presenters) {
     let lineage = existing?.lineage ?? [];
 
     if (!existing) {
-      challengeId = challengeForNewDesign(body)?.id ?? null;
+      challengeId = (await challengeForNewDesign(body))?.id ?? null;
       if (body.remixOf) ({ remixedFrom, lineage } = await remixOf(body.remixOf));
     }
 
@@ -100,16 +100,16 @@ export function registerDesignRoutes(router, ctx, presenters) {
 
     return {
       status: existing ? 200 : 201,
-      body: { design: publicDesign(design, user.id) },
+      body: { design: await publicDesign(design, user.id) },
     };
   });
 
   router.route('GET', '/v1/designs', async ({ req, query }) => {
-    const user = ctx.optionalUser(req);
+    const user = await ctx.optionalUser(req);
     const onlyMine = query.get('mine') === '1';
     if (onlyMine && !user) throw new HttpError(401, 'unauthenticated');
 
-    const designs = store.list('designs', (d) =>
+    const designs = await store.list('designs', (d) =>
       onlyMine ? d.ownerId === user.id : d.published,
     );
 
@@ -123,23 +123,23 @@ export function registerDesignRoutes(router, ctx, presenters) {
     const max = Math.min(Number(query.get('limit')) || 30, 100);
     return {
       status: 200,
-      body: { designs: designs.slice(0, max).map((d) => publicDesign(d, user?.id)) },
+      body: { designs: await Promise.all(designs.slice(0, max).map((d) => publicDesign(d, user?.id))) },
     };
   });
 
   router.route('GET', '/v1/designs/:designId', async ({ req, params }) => {
-    const user = ctx.optionalUser(req);
-    const design = store.get('designs', params.designId);
+    const user = await ctx.optionalUser(req);
+    const design = await store.get('designs', params.designId);
 
     const visible = design && (design.published || design.ownerId === user?.id);
     if (!visible) throw new HttpError(404, 'not_found');
 
-    return { status: 200, body: { design: publicDesign(design, user?.id) } };
+    return { status: 200, body: { design: await publicDesign(design, user?.id) } };
   });
 
   router.route('DELETE', '/v1/designs/:designId', async ({ req, params }) => {
-    const user = ctx.authed(req);
-    const design = store.get('designs', params.designId);
+    const user = await ctx.authed(req);
+    const design = await store.get('designs', params.designId);
     if (!design || design.ownerId !== user.id) {
       throw new HttpError(404, 'not_found');
     }
@@ -150,12 +150,12 @@ export function registerDesignRoutes(router, ctx, presenters) {
 
   // Toggles: liking an already-liked design removes the like.
   router.route('POST', '/v1/designs/:designId/like', async ({ req, params }) => {
-    const user = ctx.authed(req);
-    const design = store.get('designs', params.designId);
+    const user = await ctx.authed(req);
+    const design = await store.get('designs', params.designId);
     if (!design || !design.published) throw new HttpError(404, 'not_found');
 
     const key = `${design.id}:${user.id}`;
-    const liked = !store.get('likes', key);
+    const liked = !(await store.get('likes', key));
     if (liked) {
       await store.put('likes', key, { id: key });
     } else {

@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 /**
  * Small document store: collections of JSON documents keyed by id.
  * Persists to one JSON file with atomic writes. Pass ':memory:' for tests.
- * One process only; swap this class for a database to scale out.
+ * One process only. For serverless hosting use RedisStore below.
  */
 export class Store {
   constructor(file = ':memory:') {
@@ -28,12 +28,12 @@ export class Store {
     return (this.data[name] ??= {});
   }
 
-  get(coll, id) {
+  async get(coll, id) {
     const doc = this.#coll(coll)[id];
     return doc ? structuredClone(doc) : null;
   }
 
-  list(coll, predicate = () => true) {
+  async list(coll, predicate = () => true) {
     return Object.values(this.#coll(coll)).filter(predicate).map((d) => structuredClone(d));
   }
 
@@ -66,4 +66,64 @@ export class Store {
     }
     return this.queued;
   }
+}
+
+/**
+ * The same interface on Redis over HTTPS (Upstash, also what Vercel's Redis
+ * integration provides), so any number of short-lived serverless instances can
+ * share one database. Each collection is one Redis hash: id -> JSON document.
+ */
+export class RedisStore {
+  constructor({ url, token, fetchImpl = fetch, prefix = 'dw:' }) {
+    this.url = url.replace(/\/+$/, '');
+    this.token = token;
+    this.fetch = fetchImpl;
+    this.prefix = prefix;
+  }
+
+  async load() {
+    return this;
+  }
+
+  async #command(...args) {
+    const response = await this.fetch(this.url, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.error) {
+      throw new Error(`redis_error:${response.status}:${body.error ?? ''}`);
+    }
+    return body.result;
+  }
+
+  async get(coll, id) {
+    const raw = await this.#command('HGET', this.prefix + coll, id);
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  // Reads the whole collection, then filters. Fine for a small shop; add
+  // indexes (as with `emails`) before a collection grows large.
+  async list(coll, predicate = () => true) {
+    const values = (await this.#command('HVALS', this.prefix + coll)) ?? [];
+    return values.map((raw) => JSON.parse(raw)).filter(predicate);
+  }
+
+  async put(coll, id, doc) {
+    await this.#command('HSET', this.prefix + coll, id, JSON.stringify(doc));
+    return doc;
+  }
+
+  async del(coll, id) {
+    await this.#command('HDEL', this.prefix + coll, id);
+  }
+}
+
+/** Redis when configured (serverless), otherwise the JSON file (one process). */
+export async function createStore(config) {
+  if (config.redis.url && config.redis.token) {
+    return new RedisStore(config.redis).load();
+  }
+  return new Store(config.dataFile).load();
 }

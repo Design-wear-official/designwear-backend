@@ -49,11 +49,11 @@ export function createContext(deps) {
   }
 
   // The signed-in user for this request, or a 401.
-  function authed(req) {
+  async function authed(req) {
     const header = req.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     const payload = verifyToken(token, config.jwtSecret, now());
-    const user = payload && store.get('users', payload.sub);
+    const user = payload && (await store.get('users', payload.sub));
     if (!user || user.tokenVersion !== payload.v) {
       throw new HttpError(401, 'unauthenticated', 'Sign in required.');
     }
@@ -61,9 +61,9 @@ export function createContext(deps) {
   }
 
   // Like authed(), but signed-out callers get null instead of an error.
-  function optionalUser(req) {
+  async function optionalUser(req) {
     try {
-      return authed(req);
+      return await authed(req);
     } catch {
       return null;
     }
@@ -103,13 +103,32 @@ export function createContext(deps) {
     return body;
   }
 
-  function findUserByEmail(email) {
-    return store.list('users', (u) => u.email === email)[0];
+  // Accounts are found through small index collections (email -> user id,
+  // Firebase uid -> user id) so a lookup never scans every user.
+  async function findUserByEmail(email) {
+    return findUserVia('emails', email);
+  }
+
+  async function findUserByFirebaseUid(uid) {
+    return findUserVia('uids', uid);
+  }
+
+  async function findUserVia(index, key) {
+    const entry = await store.get(index, key);
+    return entry ? store.get('users', entry.userId) : null;
+  }
+
+  async function indexUser(user) {
+    await store.put('emails', user.email, { id: user.email, userId: user.id });
+    if (user.firebaseUid) {
+      await store.put('uids', user.firebaseUid, { id: user.firebaseUid, userId: user.id });
+    }
   }
 
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
-    ipOf, limit, authed, optionalUser, issue, readBody, findUserByEmail,
+    ipOf, limit, authed, optionalUser, issue, readBody,
+    findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }
 

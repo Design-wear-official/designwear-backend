@@ -8,9 +8,9 @@ export function garmentPrice(garment) {
 }
 
 export function createPresenters({ store, now }) {
-  function publicDesign(design, viewerId) {
+  async function publicDesign(design, viewerId) {
     const liked = viewerId
-      ? Boolean(store.get('likes', `${design.id}:${viewerId}`))
+      ? Boolean(await store.get('likes', `${design.id}:${viewerId}`))
       : false;
 
     return {
@@ -43,11 +43,11 @@ export function createPresenters({ store, now }) {
     return time >= Date.parse(challenge.startsAt) && time < Date.parse(challenge.endsAt);
   }
 
-  function entriesOf(challenge) {
+  async function entriesOf(challenge) {
     return store.list('designs', (d) => d.challengeId === challenge.id && d.published);
   }
 
-  function publicChallenge(challenge) {
+  async function publicChallenge(challenge) {
     return {
       id: challenge.id,
       title: challenge.title,
@@ -55,7 +55,7 @@ export function createPresenters({ store, now }) {
       startsAt: challenge.startsAt,
       endsAt: challenge.endsAt,
       open: isOpen(challenge),
-      entries: entriesOf(challenge).length,
+      entries: (await entriesOf(challenge)).length,
     };
   }
 

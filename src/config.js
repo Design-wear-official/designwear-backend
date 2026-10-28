@@ -9,6 +9,14 @@ export function loadConfig(env = process.env) {
     jwtSecret: env.DESIGNWEAR_JWT_SECRET ?? '',
     dataFile: env.DESIGNWEAR_DATA_FILE ?? './.data/store.json',
     clientLogFile: env.DESIGNWEAR_CLIENT_LOG_FILE ?? './.data/client-logs.ndjson',
+    // Serverless database (Upstash Redis REST). Vercel's Redis integration
+    // sets the KV_REST_API_* names; either pair works.
+    redis: {
+      url: env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL ?? '',
+      token: env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN ?? '',
+    },
+    // On Vercel there is no writable disk or long-lived process.
+    serverless: Boolean(env.VERCEL),
     allowedOrigins: list(env.ALLOWED_ORIGINS),
     trustProxy: env.TRUST_PROXY === '1',
     cms: {
@@ -37,6 +45,9 @@ export function loadConfig(env = process.env) {
   if (production) {
     const problems = [];
     if (config.jwtSecret.length < 32) problems.push('DESIGNWEAR_JWT_SECRET must be at least 32 characters');
+    if (config.serverless && !(config.redis.url && config.redis.token)) {
+      problems.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set (no disk on Vercel)');
+    }
     if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
     if (!config.mailWebhookUrl) problems.push('MAIL_WEBHOOK_URL must be set (password reset emails)');
     if (config.adminToken && config.adminToken.length < 24) {

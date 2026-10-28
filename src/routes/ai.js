@@ -18,7 +18,7 @@ export function registerAiRoutes(router, ctx) {
   const { catalog, ai } = ctx;
 
   router.route('POST', '/v1/ai/try-on', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     ctx.limit(`tryon:${user.id}`, 10, 3600_000);
     const body = await ctx.readBody(req, 12_000_000);
 
@@ -48,7 +48,7 @@ export function registerAiRoutes(router, ctx) {
   // Design Studio assistant. Returns the reply text and, when the model
   // produced one, a design to apply.
   router.route('POST', '/v1/ai/design-agent', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     ctx.limit(`agent:${user.id}`, 60, 3600_000);
     const body = await ctx.readBody(req, 6_000_000);
 
@@ -76,7 +76,7 @@ export function registerAiRoutes(router, ctx) {
   });
 
   router.route('POST', '/v1/ai/design-image', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     ctx.limit(`dimage:${user.id}`, 20, 3600_000);
 
     const body = await ctx.readBody(req);

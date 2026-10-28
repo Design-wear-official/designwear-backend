@@ -12,7 +12,7 @@ export function registerOrderRoutes(router, ctx) {
   const pricing = createPricing(ctx);
 
   router.route('POST', '/v1/orders', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     ctx.limit(`order:${user.id}`, 20, 3600_000);
     const body = await ctx.readBody(req);
 
@@ -47,16 +47,15 @@ export function registerOrderRoutes(router, ctx) {
   });
 
   router.route('GET', '/v1/orders', async ({ req }) => {
-    const user = ctx.authed(req);
-    const orders = store
-      .list('orders', (o) => o.userId === user.id)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const user = await ctx.authed(req);
+    const mine = await store.list('orders', (o) => o.userId === user.id);
+    const orders = mine.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return { status: 200, body: { orders } };
   });
 
   router.route('POST', '/v1/orders/:orderId/cancel', async ({ req, params }) => {
-    const user = ctx.authed(req);
-    const order = store.get('orders', params.orderId);
+    const user = await ctx.authed(req);
+    const order = await store.get('orders', params.orderId);
 
     if (!order || order.userId !== user.id) {
       throw new HttpError(404, 'not_found');

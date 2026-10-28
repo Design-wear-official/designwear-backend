@@ -4,25 +4,46 @@ Accounts, carts, orders, community designs, search and AI for the DesignWear app
 Plain Node (20+), no dependencies.
 
 ```sh
-cp .env.example .env     # then export the variables, or set them in your host
-node src/index.js        # http://127.0.0.1:8787
-node --test              # 15 tests
+cp .env.example .env     # private settings, git-ignored; the server loads it itself
+npm start                # http://127.0.0.1:8787  (node --env-file-if-exists=.env src/index.js)
+node --test              # 29 tests
 ```
 
-Point the app at it with `DESIGNWEAR_API_URL` in the app's `.env`.
+Point the app at it with `DESIGNWEAR_API_URL` in the app's `.env`. The app repository's
+`./run.sh` starts this server for you when that address is `http://localhost:<port>`.
+
+Documentation for the whole project (architecture, configuration, API, deployment, CI/CD,
+troubleshooting) is in the app repository's `docs/` folder.
 
 ## What it does
 | Area | Routes |
 |---|---|
-| Auth | `POST /v1/auth/register`, `/login`, `/password-reset/request`, `/password-reset/confirm`; `GET/PATCH /v1/me`; `POST /v1/me/password` |
-| Cart & orders | `GET/PUT /v1/cart`; `POST/GET /v1/orders`; `POST /v1/orders/:id/cancel` |
-| Payments | `POST /v1/payments/razorpay/order`, `/verify` (needs Razorpay keys) |
-| Community | `POST/GET /v1/designs` (stores the Design Studio's own design JSON plus PNG previews), `GET/DELETE /v1/designs/:id`, `POST /v1/designs/:id/like` |
-| Search | `GET /v1/search?q=&inStock=1` |
-| AI | `POST /v1/ai/design-agent` (the one chat bot: the Design Studio assistant, which edits the design from what the user asks), `POST /v1/ai/design-image` (Gemini 4 Argon for text, an image model for graphics), `POST /v1/ai/try-on` (a catalog product or the customer's own design image) |
+| Catalog | `GET /v1/products`, `/v1/products/:id` (originals that can be sold; remixes and unpriced items are hidden), `GET /v1/search?q=&inStock=1` |
+| Product photos | `GET /v1/img/:host/:project/:dataset/:file` (allow-listed image CDN only; `?w=`, `?q=`, `?auto=format`). Browsers are blocked by the CDN's own CORS list, so web loads photos through here |
+| Auth | `POST /v1/auth/register`, `/login`, `/password-reset/request`, `/password-reset/confirm`; `GET/PATCH /v1/me`; `POST /v1/me/password`; `GET/PUT /v1/me/addresses` |
 | Google sign-in | `POST /v1/auth/google` (trades a Firebase ID token for a session; needs `FIREBASE_PROJECT_ID`) |
+| Cart & orders | `GET/PUT /v1/cart`; `POST/GET /v1/orders`; `POST /v1/orders/:id/cancel` |
+| Payments | `POST /v1/payments/razorpay/order`, `/verify` (needs Razorpay keys; the app offers cash on delivery today) |
+| Community | `POST/GET /v1/designs` (the Design Studio's own design JSON plus PNG previews), `GET/DELETE /v1/designs/:id`, `POST /v1/designs/:id/like` |
 | Challenges | `GET /v1/challenges/current`, `GET /v1/challenges/:id/entries`, `PUT /v1/admin/challenges/:id` (needs `DESIGNWEAR_ADMIN_TOKEN`) |
-| Meta | `GET /v1/health`, `GET /v1/config` |
+| AI | `POST /v1/ai/design-agent` (**the one chat bot**: the Design Studio assistant, which edits the design from what the user asks), `POST /v1/ai/design-image`, `POST /v1/ai/try-on` (a catalog product or the customer's own design image) |
+| Diagnostics | `POST /v1/logs` (app warnings and errors, redacted), `GET /v1/health`, `GET /v1/config` |
+
+There is no general-purpose chat route.
+
+## Settings
+Loaded from the environment, or from `.env` (`.env.example` lists them all):
+
+| Setting | Notes |
+|---|---|
+| `PORT`, `HOST`, `NODE_ENV` | `NODE_ENV=production` enables the safety checks below |
+| `DESIGNWEAR_JWT_SECRET`, `ALLOWED_ORIGINS`, `MAIL_WEBHOOK_URL` | **required in production** |
+| `SETHUCMS_URL`, `SETHUCMS_CONNECTION_ID`, `SETHUCMS_TOKEN` | the catalog source; use a read-only token |
+| `FIREBASE_PROJECT_ID` | enables Google sign-in |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_IMAGE_MODEL` | the assistant, graphics, try-on |
+| `DESIGNWEAR_ADMIN_TOKEN` | enables the challenge admin route |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | online payments |
+| `IMAGE_HOSTS`, `DESIGNWEAR_DATA_FILE`, `DESIGNWEAR_CLIENT_LOG_FILE`, `TRUST_PROXY` | optional |
 
 ## Security model
 - Passwords: scrypt with a per-user salt. Sessions: HS256 JWT (7 days) tied to a per-user
@@ -30,7 +51,7 @@ Point the app at it with `DESIGNWEAR_API_URL` in the app's `.env`.
 - Orders are **priced on the server** from the catalog (or the design price table); prices
   sent by a client are ignored. Stock and sizes are checked.
 - Users can only read, cancel or edit their own orders, carts and designs.
-- Rate limits on sign-up, sign-in, reset, orders, designs, chat and try-on. Login and reset
+- Rate limits on sign-up, sign-in, reset, orders, designs, the assistant, graphics, try-on, photos and logs. Login and reset
   answers don't reveal whether an email has an account.
 - Strict CORS allow-list, `no-store`, `nosniff`, 1 MB body limit (9 MB for try-on photos).
 - Production refuses to start without a strong `DESIGNWEAR_JWT_SECRET`, `ALLOWED_ORIGINS`
@@ -63,14 +84,37 @@ left. Designs published from the challenge page become entries, ranked by likes.
 
 ## Hosting
 
-This is a long-running Node server that keeps its data (accounts, orders, designs) in one
-file and its rate limits in memory. That means: **one always-on machine with a persistent
-disk.** It is *not* a fit for serverless hosts such as Vercel Functions (no persistent
-disk, many short-lived instances). Good fits: Fly.io, Railway, Render (with a disk), or
-any VPS running Docker. To run several machines later, replace `src/store.js` with a
-database first.
+Two ways to run it, from the same code:
 
-### Fly.io (config included: `fly.toml`)
+- **Vercel (serverless).** Data lives in a Redis database reached over HTTPS, so any number
+  of short-lived instances can share it. Set it up below.
+- **One always-on machine** (Fly.io, a VPS, Docker). Data lives in one JSON file on a
+  persistent disk. Used automatically when no Redis settings are present.
+
+### Vercel
+
+1. **Database.** In the Vercel dashboard open *Storage* (or the Marketplace) and add an
+   **Upstash Redis** database to the project. It sets `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN` (or set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`).
+2. **Settings.** Add the variables from `.env.example` in *Project → Settings → Environment
+   Variables*: at least `NODE_ENV=production`, `DESIGNWEAR_JWT_SECRET`, `ALLOWED_ORIGINS`,
+   `MAIL_WEBHOOK_URL`, `SETHUCMS_*`, and optionally Gemini, Razorpay, Firebase and admin keys.
+3. **Deploy.** Import this repository as a project (framework "Other"), or run
+   `npx vercel deploy --prod`. `vercel.json` sends every `/v1/*` request to `api/index.js`.
+4. Point the app's `DESIGNWEAR_API_URL` at the project's address.
+
+What changes on serverless, honestly:
+
+- **Rate limits are per instance** (kept in memory), so they slow abuse but are not a hard
+  global cap. Password hashing (scrypt) is the real guard against guessing.
+- **Request bodies are capped at 4.5 MB by Vercel.** Try-on photos must be downscaled by
+  the app below that.
+- **Collections are read whole** when listed (designs, orders). Fine for a small shop; move
+  to indexed queries (or Postgres) if a collection grows into the thousands.
+- **Client logs go to Vercel's log stream** only (no disk).
+- Accounts are found through small index collections (`emails`, `uids`), never by scanning.
+
+### Fly.io / any single machine (config included: `fly.toml`)
 ```sh
 fly launch --no-deploy --copy-config          # first time: creates the app, keeps fly.toml
 fly volume create designwear_data --size 1 --region sin

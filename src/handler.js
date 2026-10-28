@@ -85,7 +85,7 @@ export function createHandler({ ctx, router }) {
         params: found.params,
         query: url.searchParams,
       });
-      userId = optionalUser(req)?.id;
+      userId = (await optionalUser(req))?.id;
 
       if (result.raw) return sendRaw(result.status, result.raw);
       return sendJson(result.status, result.body);

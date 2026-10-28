@@ -11,28 +11,29 @@ export function registerChallengeRoutes(router, ctx, presenters) {
 
   router.route('GET', '/v1/challenges/current', async () => {
     const newestFirst = (a, b) => b.startsAt.localeCompare(a.startsAt);
-    const current = store.list('challenges', isOpen).sort(newestFirst)[0];
+    const current = (await store.list('challenges', isOpen)).sort(newestFirst)[0];
     return {
       status: 200,
-      body: { challenge: current ? publicChallenge(current) : null },
+      body: { challenge: current ? await publicChallenge(current) : null },
     };
   });
 
   router.route('GET', '/v1/challenges/:challengeId/entries', async ({ req, params }) => {
-    const user = ctx.optionalUser(req);
-    const challenge = store.get('challenges', params.challengeId);
+    const user = await ctx.optionalUser(req);
+    const challenge = await store.get('challenges', params.challengeId);
     if (!challenge) throw new HttpError(404, 'not_found');
 
     // Most liked first; ties go to the newer entry.
-    const designs = entriesOf(challenge)
+    const entries = await entriesOf(challenge);
+    const designs = entries
       .sort((a, b) => b.likeCount - a.likeCount || b.createdAt.localeCompare(a.createdAt))
       .slice(0, MAX_ENTRIES_SHOWN);
 
     return {
       status: 200,
       body: {
-        challenge: publicChallenge(challenge),
-        designs: designs.map((d) => publicDesign(d, user?.id)),
+        challenge: await publicChallenge(challenge),
+        designs: await Promise.all(designs.map((d) => publicDesign(d, user?.id))),
       },
     };
   });
@@ -56,6 +57,6 @@ export function registerChallengeRoutes(router, ctx, presenters) {
     };
     await store.put('challenges', challenge.id, challenge);
 
-    return { status: 200, body: { challenge: publicChallenge(challenge) } };
+    return { status: 200, body: { challenge: await publicChallenge(challenge) } };
   });
 }

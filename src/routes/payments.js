@@ -9,14 +9,14 @@ export function registerPaymentRoutes(router, ctx) {
   const { config, store } = ctx;
 
   router.route('POST', '/v1/payments/razorpay/order', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     const { keyId, keySecret } = config.razorpay;
     if (!keyId || !keySecret) {
       throw bad('payments_unavailable', 'Online payments are not enabled.');
     }
 
     const body = await ctx.readBody(req);
-    const order = store.get('orders', String(body.orderId ?? ''));
+    const order = await store.get('orders', String(body.orderId ?? ''));
     const payable = order && order.userId === user.id && order.status === 'awaiting_payment';
     if (!payable) throw new HttpError(404, 'not_found');
 
@@ -53,10 +53,10 @@ export function registerPaymentRoutes(router, ctx) {
   });
 
   router.route('POST', '/v1/payments/razorpay/verify', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     const body = await ctx.readBody(req);
 
-    const order = store.get('orders', String(body.orderId ?? ''));
+    const order = await store.get('orders', String(body.orderId ?? ''));
     const verifiable = order && order.userId === user.id && order.payment.razorpayOrderId;
     if (!verifiable) throw new HttpError(404, 'not_found');
 

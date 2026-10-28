@@ -9,8 +9,8 @@ const TAX_RATE = 0.18;
 export function createPricing({ store, catalog }) {
   // The design behind a cart line, if this user is allowed to buy it
   // (published designs, or their own drafts). Otherwise null.
-  function purchasableDesign(designId, userId) {
-    const design = store.get('designs', designId);
+  async function purchasableDesign(designId, userId) {
+    const design = await store.get('designs', designId);
     if (!design) return null;
     if (!design.published && design.ownerId !== userId) return null;
     return design;
@@ -31,7 +31,7 @@ export function createPricing({ store, catalog }) {
 
     for (const line of v.lines(inputLines)) {
       if (line.designId) {
-        const design = purchasableDesign(line.designId, userId);
+        const design = await purchasableDesign(line.designId, userId);
         if (!design) {
           throw bad('unknown_design', 'A design in your cart is no longer available.');
         }

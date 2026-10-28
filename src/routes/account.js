@@ -11,11 +11,11 @@ export function registerAccountRoutes(router, ctx) {
 
   router.route('GET', '/v1/me', async ({ req }) => ({
     status: 200,
-    body: { user: publicUser(ctx.authed(req)) },
+    body: { user: publicUser((await ctx.authed(req))) },
   }));
 
   router.route('PATCH', '/v1/me', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     const body = await ctx.readBody(req);
 
     if (body.name !== undefined) {
@@ -30,7 +30,7 @@ export function registerAccountRoutes(router, ctx) {
   });
 
   router.route('POST', '/v1/me/password', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     const body = await ctx.readBody(req);
 
     const currentOk = await verifyPassword(String(body.current ?? ''), user.pw);
@@ -46,13 +46,13 @@ export function registerAccountRoutes(router, ctx) {
   });
 
   router.route('GET', '/v1/me/addresses', async ({ req }) => {
-    const user = ctx.authed(req);
-    const saved = store.get('addresses', user.id);
+    const user = await ctx.authed(req);
+    const saved = await store.get('addresses', user.id);
     return { status: 200, body: { addresses: saved?.items ?? [] } };
   });
 
   router.route('PUT', '/v1/me/addresses', async ({ req }) => {
-    const user = ctx.authed(req);
+    const user = await ctx.authed(req);
     const list = (await ctx.readBody(req)).addresses;
 
     if (!Array.isArray(list) || list.length > MAX_ADDRESSES) {

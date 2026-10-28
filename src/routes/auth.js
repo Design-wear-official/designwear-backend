@@ -30,7 +30,7 @@ export function registerAuthRoutes(router, ctx) {
     const name = v.str(body.name, 'name', { max: 80 });
     const password = v.password(body.password);
 
-    if (ctx.findUserByEmail(email)) {
+    if (await ctx.findUserByEmail(email)) {
       throw new HttpError(409, 'email_taken', 'An account with this email already exists.');
     }
 
@@ -44,6 +44,7 @@ export function registerAuthRoutes(router, ctx) {
       createdAt: createdAt(),
     };
     await store.put('users', user.id, user);
+    await ctx.indexUser(user);
 
     return { status: 201, body: ctx.issue(user) };
   });
@@ -53,7 +54,7 @@ export function registerAuthRoutes(router, ctx) {
     const email = v.email(body.email);
     ctx.limit(`login:${ctx.ipOf(req)}:${email}`, 10, 15 * 60_000);
 
-    const user = ctx.findUserByEmail(email);
+    const user = await ctx.findUserByEmail(email);
     const supplied = String(body.password ?? '');
 
     let passwordOk = false;
@@ -89,8 +90,8 @@ export function registerAuthRoutes(router, ctx) {
       throw new HttpError(502, 'google_unavailable', 'Could not verify the Google sign-in. Try again.');
     }
 
-    const byUid = store.list('users', (u) => u.firebaseUid === google.uid)[0];
-    let user = byUid ?? ctx.findUserByEmail(google.email);
+    const byUid = await ctx.findUserByFirebaseUid(google.uid);
+    let user = byUid ?? (await ctx.findUserByEmail(google.email));
 
     if (!user) {
       user = {
@@ -104,6 +105,7 @@ export function registerAuthRoutes(router, ctx) {
         createdAt: createdAt(),
       };
       await store.put('users', user.id, user);
+      await ctx.indexUser(user);
       return { status: 200, body: ctx.issue(user) };
     }
 
@@ -113,6 +115,7 @@ export function registerAuthRoutes(router, ctx) {
     if (!user.firebaseUid) {
       user.firebaseUid = google.uid;
       await store.put('users', user.id, user);
+      await ctx.indexUser(user);
     }
     return { status: 200, body: ctx.issue(user) };
   });
@@ -120,7 +123,7 @@ export function registerAuthRoutes(router, ctx) {
   router.route('POST', '/v1/auth/password-reset/request', async ({ req }) => {
     ctx.limit(`reset:${ctx.ipOf(req)}`, 5, HOUR_MS);
     const email = v.email((await ctx.readBody(req)).email);
-    const user = ctx.findUserByEmail(email);
+    const user = await ctx.findUserByEmail(email);
 
     if (user) {
       const code = String(randomInt(100000, 1000000));
@@ -147,8 +150,8 @@ export function registerAuthRoutes(router, ctx) {
 
     const email = v.email(body.email);
     const newPassword = v.password(body.password);
-    const user = ctx.findUserByEmail(email);
-    const reset = user && store.get('resets', user.id);
+    const user = await ctx.findUserByEmail(email);
+    const reset = user && (await store.get('resets', user.id));
     const invalidCode = new HttpError(400, 'invalid_code', 'That code is invalid or has expired.');
 
     const unusable = !reset || reset.expires < now() || reset.attempts >= RESET_MAX_ATTEMPTS;
