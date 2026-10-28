@@ -29,6 +29,7 @@ export function createPricing({ store, catalog }) {
   async function priceLines(userId, inputLines) {
     const priced = [];
     const requested = new Map(); // productId -> units asked for so far
+    const printDesigns = new Map(); // line index -> the design to print
 
     for (const line of v.lines(inputLines)) {
       if (line.designId) {
@@ -36,6 +37,7 @@ export function createPricing({ store, catalog }) {
         if (!design) {
           throw bad('unknown_design', 'A design in your cart is no longer available.');
         }
+        printDesigns.set(priced.length, design);
         priced.push(designLine(line, design));
         continue;
       }
@@ -65,7 +67,7 @@ export function createPricing({ store, catalog }) {
       priced.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
     );
     const tax = v.round2(subtotal * TAX_RATE);
-    return { lines: priced, subtotal, tax, total: v.round2(subtotal + tax) };
+    return { lines: priced, subtotal, tax, total: v.round2(subtotal + tax), printDesigns };
   }
 
   return { purchasableDesign, designLine, priceLines };

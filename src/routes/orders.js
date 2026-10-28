@@ -16,7 +16,7 @@ export function registerOrderRoutes(router, ctx) {
     ctx.limit(`order:${user.id}`, 20, 3600_000);
     const body = await ctx.readBody(req);
 
-    const priced = await pricing.priceLines(user.id, body.lines);
+    const { printDesigns, ...priced } = await pricing.priceLines(user.id, body.lines);
     const method = body.paymentMethod === 'razorpay' ? 'razorpay' : 'cod';
     const cashOnDelivery = method === 'cod';
 
@@ -38,6 +38,34 @@ export function registerOrderRoutes(router, ctx) {
       status: cashOnDelivery ? 'placed' : 'awaiting_payment',
     };
     order.history = [{ status: order.status, at: order.createdAt }];
+
+    // Each custom design becomes a print job holding its own copy of the artwork,
+    // so editing or deleting the design later never changes what gets printed.
+    // Kept apart from the order because the artwork can be large.
+    for (const [index, design] of printDesigns) {
+      const line = order.lines[index];
+      line.printJobId = `${order.id}-${index + 1}`;
+      await store.put('printjobs', line.printJobId, {
+        id: line.printJobId,
+        orderId: order.id,
+        userId: user.id,
+        status: 'queued',
+        size: line.size,
+        quantity: line.quantity,
+        createdAt: order.createdAt,
+        design: {
+          id: design.id,
+          name: design.name,
+          garment: design.garment,
+          baseColor: design.baseColor,
+          front: design.front,
+          back: design.back,
+          designJson: design.designJson ?? null,
+          previewImage: design.previewImage ?? null,
+          backPreviewImage: design.backPreviewImage ?? null,
+        },
+      });
+    }
     await store.put('orders', order.id, order);
 
     // Online orders keep the cart until the payment is verified.
@@ -65,6 +93,10 @@ export function registerOrderRoutes(router, ctx) {
       throw new HttpError(409, 'not_cancellable', 'This order can no longer be cancelled.');
     }
 
+    for (const line of order.lines) {
+      const job = line.printJobId && (await store.get('printjobs', line.printJobId));
+      if (job) await store.put('printjobs', job.id, { ...job, status: 'cancelled' });
+    }
     order.status = 'cancelled';
     order.history = [...(order.history ?? []), { status: 'cancelled', at: new Date(now()).toISOString(), note: 'Cancelled by customer' }];
     await store.put('orders', order.id, order);

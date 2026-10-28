@@ -127,6 +127,20 @@ describe('orders', () => {
     assert.equal((await order([{ productId: 'p1', size: 'M', quantity: 5 }])).status, 201);
   });
 
+  it('keeps a private copy of each custom design for printing, even if the design is later deleted', async () => {
+    const t = await signUp('Printer');
+    const saved = await call('POST', '/v1/designs', { token: t, body: { name: 'Sunrise', garment: 'tshirt', baseColor: 0xffffffff, front: [], back: [], published: false } });
+    assert.equal(saved.status, 201);
+    const designId = saved.body.design.id;
+    const placed = await call('POST', '/v1/orders', { token: t, body: { address, lines: [{ productId: 'custom', designId, size: 'L', quantity: 2 }] } });
+    assert.equal(placed.status, 201);
+    const jobId = placed.body.order.lines[0].printJobId;
+    assert.ok(jobId);
+    await call('DELETE', `/v1/designs/${designId}`, { token: t });
+    const cancelled = await call('POST', `/v1/orders/${placed.body.order.id}/cancel`, { token: t });
+    assert.equal(cancelled.status, 200);
+  });
+
   it('rejects out of stock, unknown products, bad sizes and bad addresses', async () => {
     const t = await signUp('Picky');
     const order = (lines, addr = address) => call('POST', '/v1/orders', { token: t, body: { address: addr, lines } });
