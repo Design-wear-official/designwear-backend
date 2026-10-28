@@ -1,5 +1,17 @@
 const list = (v) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
+// The service-account key as JSON text or base64 of it; null when unset or unreadable.
+function parseServiceAccount(raw) {
+  if (!raw) return null;
+  try {
+    const text = raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+    const key = JSON.parse(text);
+    return key.client_email && key.private_key && key.project_id ? key : null;
+  } catch {
+    return null;
+  }
+}
+
 export function loadConfig(env = process.env) {
   const production = env.NODE_ENV === 'production';
   const config = {
@@ -15,6 +27,9 @@ export function loadConfig(env = process.env) {
       url: env.UPSTASH_REDIS_REST_URL ?? env.KV_REST_API_URL ?? '',
       token: env.UPSTASH_REDIS_REST_TOKEN ?? env.KV_REST_API_TOKEN ?? '',
     },
+    // Firebase service account (the downloaded JSON key, as text or base64) for
+    // Firestore. Takes priority over Redis.
+    firestore: { credentials: parseServiceAccount(env.FIREBASE_SERVICE_ACCOUNT) },
     // On Vercel there is no writable disk or long-lived process.
     serverless: Boolean(env.VERCEL),
     allowedOrigins: list(env.ALLOWED_ORIGINS),
@@ -45,8 +60,9 @@ export function loadConfig(env = process.env) {
   if (production) {
     const problems = [];
     if (config.jwtSecret.length < 32) problems.push('DESIGNWEAR_JWT_SECRET must be at least 32 characters');
-    if (config.serverless && !(config.redis.url && config.redis.token)) {
-      problems.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set (no disk on Vercel)');
+    const hasDatabase = config.firestore.credentials || (config.redis.url && config.redis.token);
+    if (config.serverless && !hasDatabase) {
+      problems.push('FIREBASE_SERVICE_ACCOUNT (or UPSTASH_REDIS_REST_URL and _TOKEN) must be set (no disk on Vercel)');
     }
     if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
     if (config.adminToken && config.adminToken.length < 24) {

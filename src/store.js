@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { createSign } from 'node:crypto';
 import { dirname } from 'node:path';
 
 /**
@@ -120,8 +121,120 @@ export class RedisStore {
   }
 }
 
-/** Redis when configured (serverless), otherwise the JSON file (one process). */
+/**
+ * The same interface on Firebase's Firestore, over its REST API with a service
+ * account (no SDK). Each document stores the record as one JSON string in the
+ * field `d`, so records keep their exact shape. Firestore caps a document at
+ * 1 MiB, so a design with very large previews can be refused on save.
+ */
+export class FirestoreStore {
+  constructor({ credentials, fetchImpl = fetch, now = () => Date.now() }) {
+    this.credentials = credentials;
+    this.fetch = fetchImpl;
+    this.now = now;
+    this.root = `https://firestore.googleapis.com/v1/projects/${credentials.project_id}/databases/(default)/documents`;
+    this.accessToken = null;
+    this.accessExpires = 0;
+  }
+
+  async load() {
+    return this;
+  }
+
+  // Service-account login: sign a short JWT, trade it for an access token, and
+  // reuse that token until shortly before it expires.
+  async #token() {
+    if (this.accessToken && this.now() < this.accessExpires - 60_000) return this.accessToken;
+
+    const issued = Math.floor(this.now() / 1000);
+    const part = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const unsigned = `${part({ alg: 'RS256', typ: 'JWT' })}.${part({
+      iss: this.credentials.client_email,
+      scope: 'https://www.googleapis.com/auth/datastore',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: issued,
+      exp: issued + 3600,
+    })}`;
+    const signature = createSign('RSA-SHA256')
+      .update(unsigned)
+      .sign(this.credentials.private_key)
+      .toString('base64url');
+
+    const response = await this.fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: `${unsigned}.${signature}`,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.access_token) {
+      throw new Error(`firestore_auth_error:${response.status}`);
+    }
+    this.accessToken = body.access_token;
+    this.accessExpires = this.now() + (body.expires_in ?? 3600) * 1000;
+    return this.accessToken;
+  }
+
+  async #call(method, url, body) {
+    const response = await this.fetch(url, {
+      method,
+      headers: {
+        authorization: `Bearer ${await this.#token()}`,
+        'content-type': 'application/json',
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (response.status === 404 && method !== 'PATCH') return null;
+    const parsed = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(`firestore_error:${response.status}`);
+    return parsed;
+  }
+
+  #docUrl(coll, id) {
+    return `${this.root}/${encodeURIComponent(coll)}/${encodeURIComponent(id)}`;
+  }
+
+  async get(coll, id) {
+    const doc = await this.#call('GET', this.#docUrl(coll, id));
+    return doc?.fields?.d ? JSON.parse(doc.fields.d.stringValue) : null;
+  }
+
+  // Reads the whole collection page by page, then filters.
+  async list(coll, predicate = () => true) {
+    const results = [];
+    let pageToken = '';
+    do {
+      const query = new URLSearchParams({ pageSize: '300', 'mask.fieldPaths': 'd' });
+      if (pageToken) query.set('pageToken', pageToken);
+      const page = await this.#call('GET', `${this.root}/${encodeURIComponent(coll)}?${query}`);
+      for (const doc of page?.documents ?? []) {
+        const record = JSON.parse(doc.fields.d.stringValue);
+        if (predicate(record)) results.push(record);
+      }
+      pageToken = page?.nextPageToken ?? '';
+    } while (pageToken);
+    return results;
+  }
+
+  async put(coll, id, doc) {
+    await this.#call('PATCH', `${this.#docUrl(coll, id)}?updateMask.fieldPaths=d`, {
+      fields: { d: { stringValue: JSON.stringify(doc) } },
+    });
+    return doc;
+  }
+
+  async del(coll, id) {
+    await this.#call('DELETE', this.#docUrl(coll, id));
+  }
+}
+
+/** Firestore or Redis when configured (serverless), otherwise the JSON file (one process). */
 export async function createStore(config) {
+  if (config.firestore.credentials) {
+    return new FirestoreStore(config.firestore).load();
+  }
   if (config.redis.url && config.redis.token) {
     return new RedisStore(config.redis).load();
   }

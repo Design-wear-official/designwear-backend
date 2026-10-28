@@ -93,9 +93,12 @@ Two ways to run it, from the same code:
 
 ### Vercel
 
-1. **Database.** In the Vercel dashboard open *Storage* (or the Marketplace) and add an
-   **Upstash Redis** database to the project. It sets `KV_REST_API_URL` and
-   `KV_REST_API_TOKEN` (or set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`).
+1. **Database.** Use Firebase's **Firestore** (you already have a Firebase project):
+   in the Firebase console open *Build → Firestore Database → Create database* (production
+   mode; the API reaches it with a service account, so no client rules are needed). Then
+   *Project settings → Service accounts → Generate new private key*, and paste the whole
+   JSON file as the `FIREBASE_SERVICE_ACCOUNT` environment variable. (Upstash Redis also
+   works: set `KV_REST_API_URL` and `KV_REST_API_TOKEN` instead.)
 2. **Settings.** Add the variables from `.env.example` in *Project → Settings → Environment
    Variables*: at least `NODE_ENV=production`, `DESIGNWEAR_JWT_SECRET`, `ALLOWED_ORIGINS`,
    `MAIL_WEBHOOK_URL`, `SETHUCMS_*`, and optionally Gemini, Razorpay, Firebase and admin keys.
@@ -109,6 +112,9 @@ What changes on serverless, honestly:
   global cap. Password hashing (scrypt) is the real guard against guessing.
 - **Request bodies are capped at 4.5 MB by Vercel.** Try-on photos must be downscaled by
   the app below that.
+- **Firestore's free plan** allows about 50k reads and 20k writes a day. Listing a collection
+  reads every document in it, so the design feed will use that quickly; fix that before launch.
+  A document is capped at 1 MiB, so a design with very large previews can be refused.
 - **Collections are read whole** when listed (designs, orders). Fine for a small shop; move
   to indexed queries (or Postgres) if a collection grows into the thousands.
 - **Client logs go to Vercel's log stream** only (no disk).
