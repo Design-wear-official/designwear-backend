@@ -45,29 +45,42 @@ export function createFirebaseVerifier({ projectId, fetchImpl = fetch, now = () 
       } catch {
         throw new TokenError('Malformed token.');
       }
-      if (header.alg !== 'RS256' || typeof header.kid !== 'string') throw new TokenError('Unsupported token.');
+      if (header.alg !== 'RS256' || typeof header.kid !== 'string') {
+        throw new TokenError('Unsupported token.');
+      }
 
       const key = (await keys()).get(header.kid);
       if (!key) {
         certs = null; // keys rotate: refetch next time
         throw new TokenError('Unknown signing key.');
       }
-      const ok = verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], 'base64url'));
+      const signedData = Buffer.from(`${parts[0]}.${parts[1]}`);
+      const signature = Buffer.from(parts[2], 'base64url');
+      const ok = verify('RSA-SHA256', signedData, key, signature);
       if (!ok) throw new TokenError('Bad signature.');
 
       const nowS = Math.floor(now() / 1000);
       if (typeof claims.exp !== 'number' || claims.exp <= nowS) throw new TokenError('Token expired.');
-      if (typeof claims.iat !== 'number' || claims.iat > nowS + 300) throw new TokenError('Token issued in the future.');
+      if (typeof claims.iat !== 'number' || claims.iat > nowS + 300) {
+        throw new TokenError('Token issued in the future.');
+      }
       if (claims.aud !== projectId) throw new TokenError('Token is for a different project.');
       if (claims.iss !== `https://securetoken.google.com/${projectId}`) throw new TokenError('Wrong issuer.');
-      if (typeof claims.sub !== 'string' || !claims.sub || claims.sub.length > 128) throw new TokenError('Missing subject.');
-      if (claims.firebase?.sign_in_provider !== 'google.com') throw new TokenError('Only Google sign-in is accepted.');
-      if (typeof claims.email !== 'string' || claims.email_verified !== true) throw new TokenError('Email is not verified.');
+      if (typeof claims.sub !== 'string' || !claims.sub || claims.sub.length > 128) {
+        throw new TokenError('Missing subject.');
+      }
+      if (claims.firebase?.sign_in_provider !== 'google.com') {
+        throw new TokenError('Only Google sign-in is accepted.');
+      }
+      if (typeof claims.email !== 'string' || claims.email_verified !== true) {
+        throw new TokenError('Email is not verified.');
+      }
 
+      const displayName = typeof claims.name === 'string' ? claims.name.trim() : '';
       return {
         uid: claims.sub,
         email: claims.email.toLowerCase(),
-        name: typeof claims.name === 'string' && claims.name.trim() ? claims.name.trim().slice(0, 80) : claims.email.split('@')[0],
+        name: displayName.slice(0, 80) || claims.email.split('@')[0],
       };
     },
   };

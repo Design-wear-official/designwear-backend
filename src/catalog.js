@@ -15,7 +15,9 @@ export function normaliseProduct(r) {
     stock: Number(r.stockCount ?? r.stock ?? 0) || 0,
     tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
     productType: r.productType ? String(r.productType) : '',
-    remix: Boolean(r.remixedFromHandle || r.remixedFromVersion) || /^\s*remix by\b/i.test(String(r.title ?? '')),
+    remix:
+      Boolean(r.remixedFromHandle || r.remixedFromVersion) ||
+      /^\s*remix by\b/i.test(String(r.title ?? '')),
   };
 }
 
@@ -47,8 +49,9 @@ export class CmsCatalog {
     for (let page = 0; page < 20; page++) {
       const q = new URLSearchParams({ limit: '100' });
       if (cursor) q.set('cursor', cursor);
+      const connection = encodeURIComponent(this.connectionId);
       const res = await this.fetchImpl(
-        `${this.url}/v1/connections/${encodeURIComponent(this.connectionId)}/collections/products/records?${q}`,
+        `${this.url}/v1/connections/${connection}/collections/products/records?${q}`,
         { headers: { authorization: `Bearer ${this.token}` }, redirect: 'error' },
       );
       if (!res.ok) throw new Error(`catalog_unavailable:${res.status}`);

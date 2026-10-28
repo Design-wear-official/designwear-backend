@@ -16,7 +16,9 @@ const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/;
 export function str(v, name, { min = 1, max = 200 } = {}) {
   if (typeof v !== 'string') throw bad('invalid_field', `${name} must be a string`);
   const s = v.trim();
-  if (s.length < min || s.length > max) throw bad('invalid_field', `${name} must be ${min}-${max} characters`);
+  if (s.length < min || s.length > max) {
+    throw bad('invalid_field', `${name} must be ${min}-${max} characters`);
+  }
   return s;
 }
 
@@ -112,7 +114,9 @@ export function studioDesign(d) {
   if (typeof d !== 'object' || Array.isArray(d)) throw bad('invalid_design', 'designJson must be an object.');
   const text = JSON.stringify(d);
   if (text.length > 400_000) throw bad('design_too_large', 'Design is too large (max 400 KB).');
-  if (!Array.isArray(d.elements) || d.elements.length > 60) throw bad('invalid_design', 'A design has at most 60 elements.');
+  if (!Array.isArray(d.elements) || d.elements.length > 60) {
+    throw bad('invalid_design', 'A design has at most 60 elements.');
+  }
   return d;
 }
 
@@ -120,7 +124,9 @@ export function studioDesign(d) {
 export function preview(b64, name) {
   if (b64 === undefined || b64 === null || b64 === '') return null;
   const s = String(b64);
-  if (s.length > 450_000 || !/^[A-Za-z0-9+/=]+$/.test(s)) throw bad('invalid_preview', `${name} must be a base64 image under ~330 KB.`);
+  if (s.length > 450_000 || !/^[A-Za-z0-9+/=]+$/.test(s)) {
+    throw bad('invalid_preview', `${name} must be a base64 image under ~330 KB.`);
+  }
   const head = Buffer.from(s.slice(0, 16), 'base64');
   const png = head[0] === 0x89 && head[1] === 0x50;
   const jpg = head[0] === 0xff && head[1] === 0xd8;

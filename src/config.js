@@ -39,7 +39,9 @@ export function loadConfig(env = process.env) {
     if (config.jwtSecret.length < 32) problems.push('DESIGNWEAR_JWT_SECRET must be at least 32 characters');
     if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
     if (!config.mailWebhookUrl) problems.push('MAIL_WEBHOOK_URL must be set (password reset emails)');
-    if (config.adminToken && config.adminToken.length < 24) problems.push('DESIGNWEAR_ADMIN_TOKEN must be at least 24 characters');
+    if (config.adminToken && config.adminToken.length < 24) {
+      problems.push('DESIGNWEAR_ADMIN_TOKEN must be at least 24 characters');
+    }
     if (problems.length) throw new Error(`Refusing to start in production: ${problems.join('; ')}`);
   } else if (!config.jwtSecret) {
     // Development only: an ephemeral secret, so tokens die with the process.
