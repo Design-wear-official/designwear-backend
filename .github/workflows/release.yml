@@ -1,0 +1,62 @@
+name: Release
+
+# Push a tag like v1.2.0 to publish ghcr.io/<owner>/designwear-server:1.2.0 (and :latest)
+# after the tests pass.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/designwear-server" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+
+      - name: Build release notes from commit history
+        run: |
+          PREV_TAG="$(git tag --sort=v:refname | grep -B1 -x "$GITHUB_REF_NAME" | head -1)"
+          if [ "$PREV_TAG" = "$GITHUB_REF_NAME" ]; then
+            git log --reverse --pretty=format:'- %s' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          else
+            git log --reverse --pretty=format:'- %s' "$PREV_TAG".."$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"

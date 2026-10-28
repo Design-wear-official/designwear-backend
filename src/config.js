@@ -1,0 +1,46 @@
+const list = (v) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+export function loadConfig(env = process.env) {
+  const production = env.NODE_ENV === 'production';
+  const config = {
+    production,
+    port: Number(env.PORT ?? 8787),
+    host: env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
+    jwtSecret: env.DESIGNWEAR_JWT_SECRET ?? '',
+    dataFile: env.DESIGNWEAR_DATA_FILE ?? './.data/store.json',
+    clientLogFile: env.DESIGNWEAR_CLIENT_LOG_FILE ?? './.data/client-logs.ndjson',
+    allowedOrigins: list(env.ALLOWED_ORIGINS),
+    trustProxy: env.TRUST_PROXY === '1',
+    cms: {
+      url: (env.SETHUCMS_URL ?? '').replace(/\/+$/, ''),
+      connectionId: env.SETHUCMS_CONNECTION_ID ?? '',
+      token: env.SETHUCMS_TOKEN ?? '',
+    },
+    razorpay: { keyId: env.RAZORPAY_KEY_ID ?? '', keySecret: env.RAZORPAY_KEY_SECRET ?? '' },
+    gemini: {
+      apiKey: env.GEMINI_API_KEY ?? '',
+      // Chat uses Gemini 4 Argon. Confirm the ID in Google AI Studio's model list.
+      model: env.GEMINI_MODEL ?? 'gemini-4-argon',
+      // Try-on must return an image, so it has its own model setting.
+      imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-2.5-flash-image',
+    },
+    mailWebhookUrl: env.MAIL_WEBHOOK_URL ?? '',
+    // Enables /v1/admin/* (create weekly challenges). Unset = those routes don't exist.
+    // Firebase project whose ID tokens are accepted for Google sign-in. Unset = Google sign-in off.
+    firebaseProjectId: env.FIREBASE_PROJECT_ID ?? '',
+    adminToken: env.DESIGNWEAR_ADMIN_TOKEN ?? '',
+  };
+
+  if (production) {
+    const problems = [];
+    if (config.jwtSecret.length < 32) problems.push('DESIGNWEAR_JWT_SECRET must be at least 32 characters');
+    if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
+    if (!config.mailWebhookUrl) problems.push('MAIL_WEBHOOK_URL must be set (password reset emails)');
+    if (config.adminToken && config.adminToken.length < 24) problems.push('DESIGNWEAR_ADMIN_TOKEN must be at least 24 characters');
+    if (problems.length) throw new Error(`Refusing to start in production: ${problems.join('; ')}`);
+  } else if (!config.jwtSecret) {
+    // Development only: an ephemeral secret, so tokens die with the process.
+    config.jwtSecret = `dev-${Math.random().toString(36).slice(2)}${Date.now()}-ephemeral-secret`;
+  }
+  return config;
+}

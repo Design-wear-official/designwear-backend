@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --test
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t designwear-server:ci .
+      # The container must refuse to start in production without real secrets.
+      - name: Production guard works
+        run: |
+          if docker run --rm -e NODE_ENV=production designwear-server:ci 2>&1 | grep -q "Refusing to start"; then
+            echo "ok: refused to start without secrets"
+          else
+            echo "::error::server started in production without required secrets"; exit 1
+          fi
