@@ -19,7 +19,7 @@ Point the app at it with `DESIGNWEAR_API_URL` in the app's `.env`.
 | Payments | `POST /v1/payments/razorpay/order`, `/verify` (needs Razorpay keys) |
 | Community | `POST/GET /v1/designs` (stores the Design Studio's own design JSON plus PNG previews), `GET/DELETE /v1/designs/:id`, `POST /v1/designs/:id/like` |
 | Search | `GET /v1/search?q=&inStock=1` |
-| AI | `POST /v1/ai/chat`, `POST /v1/ai/design-agent` (Design Studio assistant), `POST /v1/ai/design-image` (Gemini 4 Argon for text, an image model for graphics), `POST /v1/ai/try-on` (a catalog product or the customer's own design image) |
+| AI | `POST /v1/ai/design-agent` (the one chat bot: the Design Studio assistant, which edits the design from what the user asks), `POST /v1/ai/design-image` (Gemini 4 Argon for text, an image model for graphics), `POST /v1/ai/try-on` (a catalog product or the customer's own design image) |
 | Google sign-in | `POST /v1/auth/google` (trades a Firebase ID token for a session; needs `FIREBASE_PROJECT_ID`) |
 | Challenges | `GET /v1/challenges/current`, `GET /v1/challenges/:id/entries`, `PUT /v1/admin/challenges/:id` (needs `DESIGNWEAR_ADMIN_TOKEN`) |
 | Meta | `GET /v1/health`, `GET /v1/config` |
@@ -60,3 +60,35 @@ curl -X PUT "$API/v1/admin/challenges/monsoon" \
 ```
 The app's Home banner shows the open challenge (latest start) with its real entry count and time
 left. Designs published from the challenge page become entries, ranked by likes.
+
+## Hosting
+
+This is a long-running Node server that keeps its data (accounts, orders, designs) in one
+file and its rate limits in memory. That means: **one always-on machine with a persistent
+disk.** It is *not* a fit for serverless hosts such as Vercel Functions (no persistent
+disk, many short-lived instances). Good fits: Fly.io, Railway, Render (with a disk), or
+any VPS running Docker. To run several machines later, replace `src/store.js` with a
+database first.
+
+### Fly.io (config included: `fly.toml`)
+```sh
+fly launch --no-deploy --copy-config          # first time: creates the app, keeps fly.toml
+fly volume create designwear_data --size 1 --region sin
+fly secrets set \
+  DESIGNWEAR_JWT_SECRET="$(openssl rand -base64 48)" \
+  ALLOWED_ORIGINS="https://your-web-app.vercel.app" \
+  MAIL_WEBHOOK_URL="https://your-mail-service/hook" \
+  SETHUCMS_URL=... SETHUCMS_CONNECTION_ID=... SETHUCMS_TOKEN=... \
+  FIREBASE_PROJECT_ID=... GEMINI_API_KEY=... \
+  DESIGNWEAR_ADMIN_TOKEN="$(openssl rand -base64 32)"
+fly deploy --ha=false                          # --ha=false keeps it to one machine
+```
+Your API address is then `https://designwear-api.fly.dev`. Put it in the app's
+`DESIGNWEAR_API_URL`. Production refuses to start unless `DESIGNWEAR_JWT_SECRET`,
+`ALLOWED_ORIGINS` and `MAIL_WEBHOOK_URL` are set.
+
+`MAIL_WEBHOOK_URL` receives `POST {to, subject, text}` for password-reset codes; point it at
+any small mail relay you control (Resend, Postmark, SES behind a tiny function).
+
+### Back up the disk
+All state is `/data/store.json`: `fly ssh sftp get /data/store.json` (or `fly volumes snapshots`).

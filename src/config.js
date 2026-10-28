@@ -28,6 +28,9 @@ export function loadConfig(env = process.env) {
     // Enables /v1/admin/* (create weekly challenges). Unset = those routes don't exist.
     // Firebase project whose ID tokens are accepted for Google sign-in. Unset = Google sign-in off.
     firebaseProjectId: env.FIREBASE_PROJECT_ID ?? '',
+    // Image CDN the API may fetch on a browser's behalf (browsers are blocked by the
+    // CDN's own CORS list). Comma-separated hosts; only /images/<project>/... paths.
+    imageHosts: list(env.IMAGE_HOSTS ?? 'cdn.sanity.io'),
     adminToken: env.DESIGNWEAR_ADMIN_TOKEN ?? '',
   };
 

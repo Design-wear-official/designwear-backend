@@ -1,7 +1,9 @@
-node_modules
 .data
 .env
 .env.*
+fly.toml
 .git
-test
+.github
 *.md
+node_modules
+test

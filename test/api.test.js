@@ -224,19 +224,16 @@ describe('search, ai, config and hygiene', () => {
     assert.equal((await call('GET', '/v1/search?q=summer')).body.results[0].id, 'p1');
   });
 
-  it('chat requires sign-in and returns the reply; try-on reports unavailable', async () => {
-    assert.equal((await call('POST', '/v1/ai/chat', { body: { messages: [{ role: 'user', content: 'hi' }] } })).status, 401);
+  it('there is one chat bot: the design agent. A general chat route does not exist', async () => {
+    assert.equal((await call('POST', '/v1/ai/chat', { body: { messages: [{ role: 'user', content: 'hi' }] } })).status, 404);
     const t = await signUp('Chatty');
-    assert.equal((await call('POST', '/v1/ai/chat', { token: t, body: { messages: [{ role: 'user', content: 'what colour?' }] } })).body.reply, 'Try navy.');
-    const sent = globalThis.__aiCalls.at(-1);
-    assert.match(sent.url, /models\/gemini-4-argon:generateContent$/);
-    assert.equal(sent.body.contents[0].role, 'user');
-    assert.ok(sent.body.systemInstruction);
+    assert.equal((await call('POST', '/v1/ai/chat', { token: t, body: { messages: [{ role: 'user', content: 'hi' }] } })).status, 404);
     const photo = Buffer.alloc(200, 1).toString('base64');
     // Photo is not a real image, so the server rejects it before calling the model.
     assert.equal((await call('POST', '/v1/ai/try-on', { token: t, body: { photo, productId: 'p1' } })).status, 400);
     const cfg = (await call('GET', '/v1/config')).body;
-    assert.deepEqual([cfg.chat, cfg.tryOn, cfg.onlinePayments], [true, true, false]);
+    assert.deepEqual([cfg.designAgent, cfg.tryOn, cfg.onlinePayments], [true, true, false]);
+    assert.equal('chat' in cfg, false);
   });
 
   it('cors allow-list, 404/405, bad json, security headers', async () => {
@@ -301,6 +298,54 @@ describe('catalog filtering', () => {
     }));
     assert.deepEqual((await cat.products()).map((p) => p.id), ['ok', 'credit']);
     assert.equal(await cat.product('r1'), null);
+  });
+});
+
+describe('image proxy for browsers', () => {
+  const hash = 'f5068b271caf192bc1f36743f9433766aa941525';
+  const good = `/v1/img/cdn.sanity.io/jh7llku7/production/${hash}-1080x1440.jpg`;
+
+  it('fetches only allow-listed Sanity image paths, passes validated resize options, caches', async () => {
+    const { createLogger } = await import('../src/logger.js');
+    const upstream = [];
+    const fetchImpl = async (url) => {
+      upstream.push(String(url));
+      return { ok: true, status: 200, headers: new Headers({ 'content-type': 'image/jpeg' }), arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 1, 2, 3]).buffer };
+    };
+    const app = createApp({
+      config: { ...config, rateLimitMultiplier: 1000 }, logger: createLogger({ sink: () => {} }), fetchImpl,
+      store: await new Store(':memory:').load(), catalog, ai: new AiProvider(config), mailer,
+    });
+    const s = createServer(app);
+    await new Promise((r) => s.listen(0, '127.0.0.1', r));
+    const get = (path, headers = {}) => fetch(`http://127.0.0.1:${s.address().port}${path}`, { headers });
+    try {
+      const ok = await get(`${good}?w=600&q=80&auto=format&evil=1`, { origin: 'http://localhost:8082' });
+      assert.equal(ok.status, 200);
+      assert.equal(ok.headers.get('content-type'), 'image/jpeg');
+      assert.equal(ok.headers.get('access-control-allow-origin'), 'http://localhost:8082');
+      assert.match(ok.headers.get('cache-control'), /max-age=86400/);
+      // Compared as bytes (a mismatch prints one short line, not a huge array diff).
+      assert.ok(Buffer.from(await ok.arrayBuffer()).equals(Buffer.from([0xff, 0xd8, 1, 2, 3])), 'the image bytes come through unchanged');
+      assert.equal(upstream[0], `https://cdn.sanity.io/images/jh7llku7/production/${hash}-1080x1440.jpg?w=600&q=80&auto=format`, 'unknown options are dropped');
+
+      await get(`${good}?w=600&q=80&auto=format`);
+      assert.equal(upstream.length, 1, 'second request is served from the cache');
+
+      await get(`${good}?w=999999`);
+      assert.ok(!upstream.at(-1).includes('999999'), 'out-of-range sizes are not forwarded');
+
+      const before = upstream.length;
+      for (const bad of [
+        `/v1/img/evil.example.com/jh7llku7/production/${hash}-1080x1440.jpg`,
+        `/v1/img/cdn.sanity.io/jh7llku7/production/not-a-hash.jpg`,
+        `/v1/img/cdn.sanity.io/jh7llku7/production/${hash}-1080x1440.svg`,
+        `/v1/img/cdn.sanity.io/..%2F..%2Fsecret/production/${hash}-1080x1440.jpg`,
+      ]) assert.equal((await get(bad)).status, 404, bad);
+      assert.equal(upstream.length, before, 'nothing was fetched for rejected paths');
+    } finally {
+      s.close();
+    }
   });
 });
 

@@ -10,7 +10,7 @@ const TOKEN_TTL = 7 * 24 * 3600;
 const RESET_TTL_MS = 15 * 60 * 1000;
 const id = (prefix = '') => prefix + randomBytes(9).toString('base64url');
 
-export function createApp({ config, store, catalog, ai, mailer, logger = createLogger({ sink: () => {} }), clientLogger = logger, now = () => Date.now(), firebase = createFirebaseVerifier({ projectId: config.firebaseProjectId, now }) }) {
+export function createApp({ config, store, catalog, ai, mailer, logger = createLogger({ sink: () => {} }), clientLogger = logger, now = () => Date.now(), fetchImpl = fetch, firebase = createFirebaseVerifier({ projectId: config.firebaseProjectId, now }) }) {
   const limiter = new RateLimiter();
 
   // ── helpers ────────────────────────────────────────────────────────────
@@ -91,8 +91,7 @@ export function createApp({ config, store, catalog, ai, mailer, logger = createL
     status: 200,
     body: {
       catalog: catalog.configured,
-      chat: Boolean(ai.chatConfigured),
-      designAgent: Boolean(ai.chatConfigured),
+      designAgent: Boolean(ai.agentConfigured),
       tryOn: Boolean(ai.tryOnConfigured),
       googleSignIn: firebase.configured,
       onlinePayments: Boolean(config.razorpay.keyId && config.razorpay.keySecret),
@@ -502,6 +501,38 @@ export function createApp({ config, store, catalog, ai, mailer, logger = createL
     return { status: 200, body: { data: p.raw ?? p } };
   });
 
+  // Product images for browsers. The image CDN only allows origins on its own list, so a
+  // web app on another origin gets 403; the API fetches the image instead. Only paths of
+  // the form /images/<project>/<dataset>/<hash>-<w>x<h>.<ext> on an allow-listed host.
+  const imageCache = new Map(); // key -> { type, body, at }
+  route('GET', '/v1/img/:host/:project/:dataset/:file', async ({ req, params, query }) => {
+    limit(`img:${ipOf(req)}`, 600, 60_000);
+    const { host, project, dataset, file } = params;
+    if (!config.imageHosts.includes(host)
+        || !/^[a-z0-9]{4,20}$/.test(project) || !/^[a-z0-9-]{2,30}$/.test(dataset)
+        || !/^[a-f0-9]{40}-\d{1,5}x\d{1,5}\.(jpg|jpeg|png|webp|gif)$/.test(file)) {
+      throw new HttpError(404, 'not_found');
+    }
+    // Only resizing options are passed on, each strictly validated.
+    const qs = new URLSearchParams();
+    const w = Number(query.get('w')); if (Number.isInteger(w) && w >= 16 && w <= 2000) qs.set('w', String(w));
+    const q = Number(query.get('q')); if (Number.isInteger(q) && q >= 20 && q <= 100) qs.set('q', String(q));
+    if (query.get('auto') === 'format') qs.set('auto', 'format');
+    const key = `${host}/${project}/${dataset}/${file}?${qs}`;
+    let hit = imageCache.get(key);
+    if (!hit || now() - hit.at > 3600_000) {
+      const res = await fetchImpl(`https://${host}/images/${project}/${dataset}/${file}?${qs}`, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) throw new HttpError(res.status === 404 ? 404 : 502, 'image_unavailable', 'Image unavailable.');
+      const type = res.headers.get('content-type') ?? '';
+      const body = Buffer.from(await res.arrayBuffer());
+      if (!type.startsWith('image/') || body.length > 8_000_000) throw new HttpError(502, 'image_unavailable', 'Image unavailable.');
+      hit = { type, body, at: now() };
+      imageCache.set(key, hit);
+      if (imageCache.size > 60) imageCache.delete(imageCache.keys().next().value);
+    }
+    return { status: 200, raw: { type: hit.type, body: hit.body } };
+  });
+
   // Search
   route('GET', '/v1/search', async ({ query }) => {
     const q = (query.get('q') ?? '').trim().toLowerCase().slice(0, 100);
@@ -528,19 +559,6 @@ export function createApp({ config, store, catalog, ai, mailer, logger = createL
   });
 
   // AI
-  route('POST', '/v1/ai/chat', async ({ req }) => {
-    const user = authed(req);
-    limit(`chat:${user.id}`, 40, 3600_000);
-    const b = await readBody(req);
-    if (!Array.isArray(b.messages) || b.messages.length === 0) throw bad('invalid_messages');
-    const messages = b.messages.slice(-12).map((m) => ({
-      role: m?.role === 'assistant' ? 'assistant' : 'user',
-      content: v.str(String(m?.content ?? ''), 'content', { max: 2000 }),
-    }));
-    if (messages[0].role !== 'user') messages.shift();
-    return { status: 200, body: { reply: await ai.chat(messages) } };
-  });
-
   route('POST', '/v1/ai/try-on', async ({ req }) => {
     const user = authed(req);
     limit(`tryon:${user.id}`, 10, 3600_000);
@@ -633,6 +651,16 @@ export function createApp({ config, store, catalog, ai, mailer, logger = createL
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const out = await r.handler({ req, params, query: url.searchParams });
         userId = optionalUser(req)?.id;
+        if (out.raw) {
+          // Binary answer (an image): cacheable by browsers, readable cross-origin.
+          res.writeHead(out.status, {
+            ...base,
+            'content-type': out.raw.type,
+            'cache-control': 'public, max-age=86400',
+            'cross-origin-resource-policy': 'cross-origin',
+          });
+          return res.end(out.raw.body);
+        }
         return send(out.status, out.body);
       }
       const pathKnown = routes.some((r) => r.re.test(url.pathname));

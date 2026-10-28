@@ -4,11 +4,6 @@ import { HttpError } from './validate.js';
 
 const DESIGN_PROMPT = readFileSync(new URL('./design_prompt.txt', import.meta.url), 'utf8');
 
-const SYSTEM = `You are DesignWear's assistant. Help customers with T-shirt, hoodie and sweatshirt \
-design ideas, colour and text combinations, sizing and styling. Be concise (under 150 words). \
-You cannot place orders, see accounts or issue refunds; for those, point people to the app's \
-Orders and Profile screens.`;
-
 function sniffMime(buf) {
   if (buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';
   if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
@@ -22,37 +17,12 @@ export class AiProvider {
     this.fetch = fetchImpl;
   }
 
-  get chatConfigured() {
+  /** The Design Studio assistant (text model). */
+  get agentConfigured() {
     return Boolean(this.gemini.apiKey);
   }
   get tryOnConfigured() {
     return Boolean(this.gemini.apiKey);
-  }
-
-  async chat(messages) {
-    if (!this.chatConfigured) throw new HttpError(503, 'ai_unavailable', 'The assistant is not enabled.');
-    const res = await this.fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.gemini.model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': this.gemini.apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM }] },
-          contents: messages.map((m) => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }],
-          })),
-          generationConfig: { maxOutputTokens: 800 },
-        }),
-      },
-    );
-    if (!res.ok) throw new HttpError(502, 'ai_error', 'The assistant is unavailable right now.');
-    const body = await res.json();
-    const text = (body.candidates?.[0]?.content?.parts ?? [])
-      .filter((p) => typeof p.text === 'string' && !p.thought)
-      .map((p) => p.text).join('').trim();
-    if (!text) throw new HttpError(502, 'ai_error', 'The assistant returned no answer.');
-    return text;
   }
 
   async tryOn(photo, product, garmentBytes = null) {
@@ -98,7 +68,7 @@ export class AiProvider {
 
   /** Design Studio assistant: returns { text, design? } where design is the model's JSON edit. */
   async designAgent({ message, history, images, design }) {
-    if (!this.chatConfigured) throw new HttpError(503, 'ai_unavailable', 'The assistant is not enabled.');
+    if (!this.agentConfigured) throw new HttpError(503, 'ai_unavailable', 'The assistant is not enabled.');
     const contents = history.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
