@@ -33,7 +33,9 @@ export async function buildApp(env = process.env) {
     store,
     catalog: new CmsCatalog(config.cms),
     ai: new AiProvider(config),
-    mailer: new WebhookMailer(config.mailWebhookUrl),
+    mailer: new WebhookMailer(config.mailWebhookUrl, fetch, {
+      printUnsent: !config.production,
+    }),
   });
   return { config, handler };
 }

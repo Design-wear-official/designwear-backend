@@ -1,12 +1,18 @@
-/** Sends mail through a webhook you control (SES/Resend/Zapier…). Dev logs instead. */
+/**
+ * Sends mail through a webhook you control (SES/Resend/Zapier…). With no webhook,
+ * development prints the message; production only notes that it was skipped, because
+ * the text holds a password-reset code that must not end up in logs.
+ */
 export class WebhookMailer {
-  constructor(url, fetchImpl = fetch) {
+  constructor(url, fetchImpl = fetch, { printUnsent = true } = {}) {
     this.url = url;
     this.fetch = fetchImpl;
+    this.printUnsent = printUnsent;
   }
   async send(to, subject, text) {
     if (!this.url) {
-      console.log(`[mail:dev] to=${to} subject=${subject}\n${text}`);
+      if (this.printUnsent) console.log(`[mail:dev] to=${to} subject=${subject}\n${text}`);
+      else console.warn(`Mail not sent (MAIL_WEBHOOK_URL is not set): ${subject}`);
       return;
     }
     const res = await this.fetch(this.url, {

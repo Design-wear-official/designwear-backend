@@ -49,7 +49,6 @@ export function loadConfig(env = process.env) {
       problems.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set (no disk on Vercel)');
     }
     if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
-    if (!config.mailWebhookUrl) problems.push('MAIL_WEBHOOK_URL must be set (password reset emails)');
     if (config.adminToken && config.adminToken.length < 24) {
       problems.push('DESIGNWEAR_ADMIN_TOKEN must be at least 24 characters');
     }
