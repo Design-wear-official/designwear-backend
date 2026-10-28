@@ -39,6 +39,14 @@ export function loadConfig(env = process.env) {
       connectionId: env.SETHUCMS_CONNECTION_ID ?? '',
       token: env.SETHUCMS_TOKEN ?? '',
     },
+    // SethuCMS as the shop's own database (users, carts, orders, designs...).
+    // Its token needs read-write access to one collection only.
+    sethuStore: {
+      url: (env.SETHUCMS_URL ?? '').replace(/\/+$/, ''),
+      connectionId: env.SETHUCMS_STORE_CONNECTION_ID ?? env.SETHUCMS_CONNECTION_ID ?? '',
+      token: env.SETHUCMS_STORE_TOKEN ?? '',
+      collection: env.SETHUCMS_STORE_COLLECTION ?? 'dw_store',
+    },
     // Where orders are mirrored in SethuCMS. Needs its own token that can write
     // only the orders collection; the catalog token stays read-only.
     ordersSync: {
@@ -68,9 +76,12 @@ export function loadConfig(env = process.env) {
   if (production) {
     const problems = [];
     if (config.jwtSecret.length < 32) problems.push('DESIGNWEAR_JWT_SECRET must be at least 32 characters');
-    const hasDatabase = config.firestore.credentials || (config.redis.url && config.redis.token);
+    const hasDatabase =
+      config.firestore.credentials ||
+      (config.redis.url && config.redis.token) ||
+      config.sethuStore.token;
     if (config.serverless && !hasDatabase) {
-      problems.push('FIREBASE_SERVICE_ACCOUNT (or UPSTASH_REDIS_REST_URL and _TOKEN) must be set (no disk on Vercel)');
+      problems.push('SETHUCMS_STORE_TOKEN (or FIREBASE_SERVICE_ACCOUNT, or UPSTASH_REDIS_REST_URL and _TOKEN) must be set (no disk on Vercel)');
     }
     if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
     if (config.adminToken && config.adminToken.length < 24) {

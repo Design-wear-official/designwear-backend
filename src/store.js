@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { createSign } from 'node:crypto';
+import { createSign, randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 
 /**
@@ -230,13 +230,113 @@ export class FirestoreStore {
   }
 }
 
-/** Firestore or Redis when configured (serverless), otherwise the JSON file (one process). */
+/**
+ * The same interface on a SethuCMS collection, so SethuCMS is the only database
+ * the shop needs. Every record of every store collection lives in one SethuCMS
+ * collection (default `dw_store`) with three text fields:
+ *   id    the key, "<collection>:<base64url of the id>"
+ *   coll  which store collection it belongs to (users, orders, ...)
+ *   data  the record as JSON
+ * Give the token read-write access to that collection only, and keep the
+ * collection hidden from everyone else: it holds password hashes.
+ */
+export class SethuStore {
+  constructor({ url, connectionId, token, collection = 'dw_store' }, fetchImpl = fetch) {
+    Object.assign(this, { url, connectionId, token, collection, fetchImpl });
+  }
+
+  async load() {
+    return this;
+  }
+
+  #base() {
+    const connection = encodeURIComponent(this.connectionId);
+    const collection = encodeURIComponent(this.collection);
+    return `${this.url}/v1/connections/${connection}/collections/${collection}/records`;
+  }
+
+  #key(coll, id) {
+    return `${coll}:${Buffer.from(String(id)).toString('base64url')}`;
+  }
+
+  async #call(method, path, body) {
+    const response = await this.fetchImpl(`${this.#base()}${path}`, {
+      method,
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        authorization: `Bearer ${this.token}`,
+        ...(body && { 'content-type': 'application/json' }),
+        ...(method !== 'GET' && { 'idempotency-key': randomUUID() }),
+      },
+      body: body && JSON.stringify(body),
+    });
+    return response;
+  }
+
+  async get(coll, id) {
+    const response = await this.#call('GET', `/${encodeURIComponent(this.#key(coll, id))}`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`sethucms_store_error:${response.status}`);
+    const record = (await response.json()).data;
+    return record?.data ? JSON.parse(record.data) : null;
+  }
+
+  // Reads every record of the collection, page by page, then filters.
+  async list(coll, predicate = () => true) {
+    const results = [];
+    let cursor = null;
+    do {
+      const query = new URLSearchParams({
+        limit: '500',
+        filter: JSON.stringify({ field: 'coll', op: 'eq', value: coll }),
+      });
+      if (cursor) query.set('cursor', cursor);
+      const response = await this.#call('GET', `?${query}`);
+      if (!response.ok) throw new Error(`sethucms_store_error:${response.status}`);
+      const body = await response.json();
+      for (const record of body.data ?? []) {
+        const doc = JSON.parse(record.data);
+        if (predicate(doc)) results.push(doc);
+      }
+      cursor = body.page?.nextCursor ?? null;
+    } while (cursor);
+    return results;
+  }
+
+  async put(coll, id, doc) {
+    const key = this.#key(coll, id);
+    const data = JSON.stringify(doc);
+    const update = await this.#call('PATCH', `/${encodeURIComponent(key)}`, { data });
+    if (update.ok) return doc;
+    if (update.status !== 404) throw new Error(`sethucms_store_error:${update.status}`);
+
+    const create = await this.#call('POST', '', { id: key, coll, data });
+    if (!create.ok) throw new Error(`sethucms_store_error:${create.status}`);
+    return doc;
+  }
+
+  async del(coll, id) {
+    const response = await this.#call('DELETE', `/${encodeURIComponent(this.#key(coll, id))}`);
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`sethucms_store_error:${response.status}`);
+    }
+  }
+}
+
+/**
+ * Picks the database: Firestore or Redis (serverless), SethuCMS when its store
+ * token is set, otherwise the JSON file (one process).
+ */
 export async function createStore(config) {
   if (config.firestore.credentials) {
     return new FirestoreStore(config.firestore).load();
   }
   if (config.redis.url && config.redis.token) {
     return new RedisStore(config.redis).load();
+  }
+  if (config.sethuStore.token && config.sethuStore.url && config.sethuStore.connectionId) {
+    return new SethuStore(config.sethuStore).load();
   }
   return new Store(config.dataFile).load();
 }

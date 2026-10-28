@@ -105,7 +105,8 @@ export class CmsCatalog {
       if (!res.ok) throw new Error(`catalog_unavailable:${res.status}`);
       const body = await res.json();
       items.push(...body.data);
-      cursor = body.nextCursor;
+      // The gateway answers { data, page: { nextCursor } }.
+      cursor = body.page?.nextCursor ?? body.nextCursor ?? null;
       if (!cursor) break;
     }
     this.caches.set(name, { at: Date.now(), items });

@@ -108,7 +108,11 @@ Two ways to run it, from the same code:
 
 ### Vercel
 
-1. **Database.** Use Firebase's **Firestore** (you already have a Firebase project):
+1. **Database, SethuCMS only:** in SethuCMS create a collection `dw_store` with text fields
+   `id` (key), `coll` and `data` (long text), and a token with read-write access to it alone,
+   then set `SETHUCMS_STORE_TOKEN`. Nothing else is needed. It is slower than Redis (every
+   read is a call to SethuCMS) and lists read a whole collection, so it suits a small shop.
+   Alternatively use Firebase's **Firestore** (you already have a Firebase project):
    in the Firebase console open *Build → Firestore Database → Create database* (production
    mode; the API reaches it with a service account, so no client rules are needed). Then
    *Project settings → Service accounts → Generate new private key*, and paste the whole
