@@ -37,7 +37,8 @@ Loaded from the environment, or from `.env` (`.env.example` lists them all):
 | Setting | Notes |
 |---|---|
 | `PORT`, `HOST`, `NODE_ENV` | `NODE_ENV=production` enables the safety checks below |
-| `DESIGNWEAR_JWT_SECRET`, `ALLOWED_ORIGINS`, `MAIL_WEBHOOK_URL` | **required in production** |
+| `DESIGNWEAR_JWT_SECRET`, `ALLOWED_ORIGINS` | **required in production** |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` (or `MAIL_WEBHOOK_URL`) | how email leaves the server; without either, no email is sent. `SUPPORT_EMAIL` is printed on receipts, `LOG_LEVEL` filters request logs |
 | `SETHUCMS_URL`, `SETHUCMS_CONNECTION_ID`, `SETHUCMS_TOKEN` | the catalog source; use a read-only token |
 | `FIREBASE_PROJECT_ID` | enables Google sign-in |
 | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_IMAGE_MODEL` | the assistant, graphics, try-on |
@@ -101,7 +102,14 @@ only. Delivered and cancelled orders are final: changes made to them in SethuCMS
 
 Every order step (placed, paid, confirmed, packed, shipped, delivered, cancelled) tells the
 customer in three places: the in-app inbox (`GET /v1/notifications`, `POST /v1/notifications/read`),
-an email (through `MAIL_WEBHOOK_URL`), and their phones.
+an email (SMTP, or `MAIL_WEBHOOK_URL`), and their phones.
+
+Placing an order emails a receipt (HTML and text, with items, GST, total, payment and address);
+`POST /v1/orders/:id/receipt` sends it again. Every send is tried up to three times and recorded
+in the `outbox` collection (masked address, status, attempts), and sensitive actions (order
+created, payment verified, cancelled, status changed in SethuCMS) are written to `audit`.
+`GET /v1/health/live` is a cheap ping; `GET /v1/health?deep=1` checks the database and returns 503
+naming the failing part. Send `x-request-id` from the app and the same id appears in the logs.
 
 - **Phones:** the app registers its Firebase token with `POST /v1/me/devices`. Set
   `FCM_SERVICE_ACCOUNT` (base64 of a service-account key for the Firebase project) to turn push on.

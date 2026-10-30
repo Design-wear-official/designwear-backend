@@ -21,7 +21,10 @@ export function createHandler({ ctx, router }) {
   return async function handle(req, res) {
     const url = new URL(req.url, 'http://x');
     const started = process.hrtime.bigint();
-    const requestId = randomBytes(6).toString('hex');
+    // Keep the caller's id when it looks safe, so one failure can be followed from the
+    // app to the API; otherwise make a new one.
+    const incoming = String(req.headers['x-request-id'] ?? '');
+    const requestId = /^[A-Za-z0-9._-]{6,64}$/.test(incoming) ? incoming : randomBytes(6).toString('hex');
     let userId;
 
     res.on('finish', () => {
@@ -43,6 +46,9 @@ export function createHandler({ ctx, router }) {
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'no-referrer',
+      'strict-transport-security': 'max-age=63072000; includeSubDomains',
+      'x-frame-options': 'DENY',
+      'permissions-policy': 'camera=(), microphone=(), geolocation=()',
       ...corsHeaders(req),
     };
 
@@ -67,7 +73,7 @@ export function createHandler({ ctx, router }) {
       if (req.method === 'OPTIONS') {
         return sendJson(204, undefined, {
           'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-          'access-control-allow-headers': 'authorization,content-type',
+          'access-control-allow-headers': 'authorization,content-type,x-request-id',
           'access-control-max-age': '600',
         });
       }

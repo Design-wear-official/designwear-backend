@@ -31,7 +31,7 @@ export function createNotifier({ store, mailer, push, logger, now }) {
   }
 
   // Adds to the inbox, then emails and pushes. `email: false` skips the email.
-  async function notify(user, { type, title, body, orderId = null, email = true }) {
+  async function notify(user, { type, title, body, orderId = null, email = true, mail = null }) {
     const at = new Date(now()).toISOString();
     try {
       const box = await inbox(user.id);
@@ -44,7 +44,15 @@ export function createNotifier({ store, mailer, push, logger, now }) {
 
     if (email && user.email) {
       await Promise.resolve()
-        .then(() => mailer.send(user.email, `DesignWear: ${title}`, body))
+        .then(() => {
+          const message = mail ?? { subject: `DesignWear: ${title}`, text: body };
+          return mailer.send(user.email, message.subject, message.text, {
+            html: message.html,
+            kind: type,
+            orderId,
+            userId: user.id,
+          });
+        })
         .catch((error) => {
           logger.error(`Notification email failed: ${error.message}`, error);
         });

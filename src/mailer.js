@@ -9,7 +9,7 @@ export class WebhookMailer {
     this.fetch = fetchImpl;
     this.printUnsent = printUnsent;
   }
-  async send(to, subject, text) {
+  async send(to, subject, text, { html } = {}) {
     if (!this.url) {
       if (this.printUnsent) console.log(`[mail:dev] to=${to} subject=${subject}\n${text}`);
       else console.warn(`Mail not sent (MAIL_WEBHOOK_URL is not set): ${subject}`);
@@ -18,8 +18,8 @@ export class WebhookMailer {
     const res = await this.fetch(this.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ to, subject, text }),
+      body: JSON.stringify({ to, subject, text, ...(html ? { html } : {}) }),
     });
-    if (!res.ok) console.error('Mail webhook failed:', res.status);
+    if (!res.ok) throw new Error(`Mail webhook failed: ${res.status}`);
   }
 }

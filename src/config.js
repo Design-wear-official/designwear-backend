@@ -70,6 +70,17 @@ export function loadConfig(env = process.env) {
       imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-4-argon',
     },
     mailWebhookUrl: env.MAIL_WEBHOOK_URL ?? '',
+    // SMTP (preferred over the webhook when SMTP_HOST is set). MAIL_FROM is "Name <a@b.c>".
+    smtp: {
+      host: env.SMTP_HOST ?? '',
+      port: Number(env.SMTP_PORT ?? 587),
+      user: env.SMTP_USER ?? '',
+      pass: env.SMTP_PASS ?? '',
+      from: env.MAIL_FROM ?? '',
+    },
+    supportEmail: env.SUPPORT_EMAIL ?? '',
+    // debug | info | warning | error: request lines below this level are dropped.
+    logLevel: env.LOG_LEVEL ?? 'info',
     // Enables /v1/admin/* (create weekly challenges). Unset = those routes don't exist.
     // Firebase project whose ID tokens are accepted for Google sign-in. Unset = Google sign-in off.
     firebaseProjectId: env.FIREBASE_PROJECT_ID ?? '',

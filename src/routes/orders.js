@@ -81,6 +81,7 @@ export function registerOrderRoutes(router, ctx) {
       await store.put('carts', user.id, { id: user.id, lines: [] });
     }
     await ctx.syncOrder(order);
+    await ctx.audit(user.id, 'order.created', order.id, { total: order.total, method });
     // Online orders are announced once the payment goes through.
     if (cashOnDelivery) await ctx.notifyOrder(order, 'placed');
     return { status: 201, body: { order } };
@@ -93,6 +94,19 @@ export function registerOrderRoutes(router, ctx) {
     const recent = mine.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const orders = await Promise.all(recent.map((o, i) => (i < 10 ? ctx.refreshOrder(o) : o)));
     return { status: 200, body: { orders } };
+  });
+
+  // The receipt again, to the address on the account. Only for orders that were placed.
+  router.route('POST', '/v1/orders/:orderId/receipt', async ({ req, params }) => {
+    const user = await ctx.authed(req);
+    ctx.limit(`receipt:${user.id}`, 5, 3600_000);
+    const order = await store.get('orders', params.orderId);
+    if (!order || order.userId !== user.id) throw new HttpError(404, 'not_found');
+    if (order.status === 'awaiting_payment') {
+      throw new HttpError(409, 'not_placed', 'This order has not been placed yet.');
+    }
+    const result = await ctx.resendReceipt(order);
+    return { status: result.sent ? 200 : 502, body: result.sent ? { sent: true } : { error: { code: 'mail_failed', message: 'The receipt could not be sent. Try again later.' } } };
   });
 
   router.route('POST', '/v1/orders/:orderId/cancel', async ({ req, params }) => {
@@ -114,6 +128,7 @@ export function registerOrderRoutes(router, ctx) {
     order.history = [...(order.history ?? []), { status: 'cancelled', at: new Date(now()).toISOString(), note: 'Cancelled by customer' }];
     await store.put('orders', order.id, order);
     await ctx.syncOrder(order);
+    await ctx.audit(user.id, 'order.cancelled', order.id, { by: 'customer' });
     await ctx.notifyOrder(order, 'cancelled');
     return { status: 200, body: { order } };
   });

@@ -55,7 +55,7 @@ before(async () => {
     store: await new Store(':memory:').load(),
     catalog: { configured: true, products: async () => products, product: async (id) => products.find((p) => p.id === id) ?? null },
     ai: {},
-    mailer: { send: async (to, subject, text) => mails.push({ to, subject, text }) },
+    mailer: { send: async (to, subject, text, options = {}) => mails.push({ to, subject, text, html: options.html }) },
     orderSync: new CmsOrderSync({ url: 'https://cms.test', connectionId: 'c1', token: 't' }, cmsFetch),
     push: new FcmPush({ credentials: { project_id: 'demo', client_email: 'svc@demo.iam.gserviceaccount.com', private_key: privateKey } }, googleFetch),
   });
@@ -87,10 +87,27 @@ describe('notifications', () => {
     assert.equal(inbox.body.items[0].title, 'Order placed');
     assert.equal(inbox.body.items[0].orderId, order.id);
     assert.equal(inbox.body.unread, 1);
-    assert.ok(mails.some((m) => m.to === 'ada@example.com' && m.subject.includes('Order placed')));
+    const receipt = mails.find((m) => m.to === 'ada@example.com' && m.subject.includes(`receipt for order #${order.id}`));
+    assert.ok(receipt, 'the placed order is mailed as a receipt');
+    assert.match(receipt.text, /Graphic Tee/);
+    assert.match(receipt.text, /Total\s+Rs 590\.00/);
+    assert.match(receipt.html, /Receipt INV-/);
     await call('POST', '/v1/notifications/read');
     assert.equal((await call('GET', '/v1/notifications')).body.unread, 0);
     assert.equal((await call('GET', '/v1/notifications', undefined, { auth: null })).status, 401);
+  });
+
+  it('the receipt can be sent again, only by the owner, and each send is recorded', async () => {
+    const order = await place();
+    const before = mails.length;
+    const again = await call('POST', `/v1/orders/${order.id}/receipt`);
+    assert.equal(again.status, 200);
+    assert.equal(mails.length, before + 1);
+    assert.match(mails.at(-1).subject, new RegExp(order.id));
+
+    const other = (await call('POST', '/v1/auth/register', { name: 'Eve', email: 'eve@example.com', password: 'password123' }, { auth: null })).body.token;
+    assert.equal((await call('POST', `/v1/orders/${order.id}/receipt`, undefined, { auth: other })).status, 404);
+    assert.equal((await call('POST', `/v1/orders/${order.id}/receipt`, undefined, { auth: null })).status, 401);
   });
 
   it('a status change made in SethuCMS notifies once, however often the order is read', async () => {

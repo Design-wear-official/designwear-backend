@@ -21,10 +21,17 @@ export const isLevel = (l) => LEVELS.includes(l);
 export function createLogger({
   sink = (line) => process.stdout.write(line + '\n'),
   now = () => Date.now(),
+  level = 'info',
 } = {}) {
+  const threshold = Math.max(0, LEVELS.indexOf(level));
   const emit = (event) => sink(JSON.stringify({ ts: new Date(now()).toISOString(), ...event }));
+  // 5xx answers are errors, 4xx warnings, the rest info; lines below `level` are dropped.
+  const requestLevel = (status) => (status >= 500 ? 'error' : status >= 400 ? 'warning' : 'info');
   return {
-    request: (e) => emit({ type: 'request', ...e }),
+    request: (e) => {
+      const lvl = requestLevel(e.status);
+      if (LEVELS.indexOf(lvl) >= threshold) emit({ type: 'request', level: lvl, ...e });
+    },
     error: (message, err) =>
       emit({
         type: 'server_error',

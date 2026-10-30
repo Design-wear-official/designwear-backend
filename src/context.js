@@ -3,15 +3,20 @@
 import { randomBytes } from 'node:crypto';
 
 import { createFirebaseVerifier } from './firebase_token.js';
-import { createLogger } from './logger.js';
+import { createLogger, redact } from './logger.js';
 import { createNotifier, orderMessage } from './notifications.js';
 import { NullOrderSync } from './order_sync.js';
 import { NullPush } from './push.js';
+import { receiptEmail } from './receipt.js';
 import { RateLimiter, safeEqual, signToken, verifyToken } from './security.js';
 import { HttpError, bad } from './validate.js';
 
 const SESSION_TTL_SECONDS = 7 * 24 * 3600;
 const DEFAULT_MAX_BODY_BYTES = 1_000_000;
+const MAIL_ATTEMPTS = 3;
+
+const maskEmail = (email) => String(email).replace(/^(.).*(@.*)$/, '$1***$2');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function newId(prefix = '') {
   return prefix + randomBytes(9).toString('base64url');
@@ -23,7 +28,7 @@ export function createContext(deps) {
     store,
     catalog,
     ai,
-    mailer,
+    mailer: rawMailer,
     orderSync = new NullOrderSync(),
     push = new NullPush(),
     logger = createLogger({ sink: () => {} }),
@@ -37,6 +42,60 @@ export function createContext(deps) {
     createFirebaseVerifier({ projectId: config.firebaseProjectId, now });
 
   const limiter = new RateLimiter();
+
+  // Who did what, kept apart from the request logs and kept longer. Never throws:
+  // an audit failure is logged, and the action itself still goes through.
+  async function audit(actor, action, target, detail = {}) {
+    const at = new Date(now()).toISOString();
+    try {
+      const id = `${at.replace(/\D/g, '')}-${randomBytes(3).toString('hex')}`;
+      await store.put('audit', id, { id, at, actor, action, target, detail });
+    } catch (error) {
+      logger.error(`Audit write failed (${action}): ${error.message}`, error);
+    }
+  }
+
+  // Sends mail with a few tries and writes one outbox row saying how it went, so a
+  // failed receipt can be found and resent. It never throws: mail must not stop an order.
+  const mailer = {
+    async send(to, subject, text, options = {}) {
+      const { html, kind = 'mail', orderId = null, userId = null } = options;
+      let attempts = 0;
+      let failure = null;
+      while (attempts < MAIL_ATTEMPTS) {
+        attempts += 1;
+        try {
+          await rawMailer.send(to, subject, text, { html });
+          failure = null;
+          break;
+        } catch (error) {
+          failure = error;
+          if (attempts < MAIL_ATTEMPTS) await sleep((config.mailRetryDelayMs ?? 400) * attempts);
+        }
+      }
+      if (failure) {
+        logger.error(`Mail "${kind}" failed after ${attempts} tries: ${failure.message}`, failure);
+      }
+      try {
+        const id = newId('m');
+        await store.put('outbox', id, {
+          id,
+          kind,
+          orderId,
+          userId,
+          to: maskEmail(to),
+          subject: redact(subject).slice(0, 200),
+          status: failure ? 'failed' : 'sent',
+          attempts,
+          error: failure ? redact(failure.message).slice(0, 200) : null,
+          at: new Date(now()).toISOString(),
+        });
+      } catch (error) {
+        logger.error(`Outbox write failed: ${error.message}`, error);
+      }
+      return { sent: !failure, attempts };
+    },
+  };
 
   // The address the request really came from (behind a proxy, the first
   // X-Forwarded-For entry; otherwise the socket).
@@ -133,7 +192,22 @@ export function createContext(deps) {
     const user = await store.get('users', order.userId);
     if (!user) return;
     const { title, body } = orderMessage(order, extra.paid ? 'paid' : status);
-    await notifier.notify(user, { type: `order.${status}`, title, body, orderId: order.id });
+    // Placing an order (paid online, or pay on delivery) sends the full receipt.
+    const mail = status === 'placed' ? receiptEmail(order, { supportEmail: config.supportEmail }) : null;
+    await notifier.notify(user, { type: `order.${status}`, title, body, orderId: order.id, mail });
+  }
+
+  // Sends the receipt again on request; returns whether the mail went out.
+  async function resendReceipt(order) {
+    const user = await store.get('users', order.userId);
+    if (!user?.email) return { sent: false, attempts: 0 };
+    const mail = receiptEmail(order, { supportEmail: config.supportEmail });
+    return mailer.send(user.email, mail.subject, mail.text, {
+      html: mail.html,
+      kind: 'receipt',
+      orderId: order.id,
+      userId: user.id,
+    });
   }
 
   // Applies what the business set in SethuCMS (status, tracking) to the order.
@@ -150,7 +224,10 @@ export function createContext(deps) {
       if (remote.tracking) order.tracking = remote.tracking;
       await store.put('orders', order.id, order);
       // The business moved the order: tell the customer (once, because the change is saved first).
-      if (changed) await notifyOrder(order, remote.status);
+      if (changed) {
+        await audit('sethucms', 'order.status', order.id, { to: remote.status });
+        await notifyOrder(order, remote.status);
+      }
     } catch (error) {
       logger.error(`Order refresh failed for ${order.id}: ${error.message}`, error);
     }
@@ -193,7 +270,7 @@ export function createContext(deps) {
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
     ipOf, limit, authed, optionalUser, issue, readBody, requireAdmin,
-    syncOrder, refreshOrder, notifier, notifyOrder, readRaw,
+    syncOrder, refreshOrder, notifier, notifyOrder, resendReceipt, audit, readRaw,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }

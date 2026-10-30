@@ -7,10 +7,34 @@ const CLIENT_LOG_MAX_BYTES = 64_000;
 export function registerSystemRoutes(router, ctx) {
   const { config, catalog, ai, firebase, clientLogger } = ctx;
 
-  router.route('GET', '/v1/health', async () => ({
+  // Cheap: is the process up? For frequent uptime pings.
+  router.route('GET', '/v1/health/live', async () => ({
     status: 200,
     body: { ok: true },
   }));
+
+  // Deeper: can the API reach its database and catalog? Reports which parts failed
+  // (never why: the details go to the logs) with a 503 so an uptime monitor alerts.
+  router.route('GET', '/v1/health', async ({ req, query }) => {
+    if (query.get('deep') !== '1') return { status: 200, body: { ok: true } };
+    ctx.limit(`health:${ctx.ipOf(req)}`, 30, 60_000);
+    const checks = {};
+    const run = async (name, fn) => {
+      try {
+        await fn();
+        checks[name] = 'ok';
+      } catch (error) {
+        checks[name] = 'failed';
+        ctx.logger.error(`Health check ${name} failed: ${error.message}`, error);
+      }
+    };
+    // A read only: no record needed, an answer (even "none") proves the database is reachable.
+    await run('store', () => ctx.store.get('health', 'probe'));
+    if (catalog.configured) await run('catalog', () => catalog.product('health-probe'));
+    checks.mail = ctx.config.smtp.host || ctx.config.mailWebhookUrl ? 'configured' : 'not_configured';
+    const ok = Object.values(checks).every((v) => v !== 'failed');
+    return { status: ok ? 200 : 503, body: { ok, checks } };
+  });
 
   router.route('GET', '/v1/config', async () => {
     const { keyId, keySecret } = config.razorpay;

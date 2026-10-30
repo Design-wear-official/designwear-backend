@@ -60,6 +60,9 @@ export function registerPaymentRoutes(router, ctx) {
     const verifiable = order && order.userId === user.id && order.payment.razorpayOrderId;
     if (!verifiable) throw new HttpError(404, 'not_found');
 
+    // Verifying twice (a retry, a double tap) must not place or announce the order twice.
+    if (order.payment.status === 'paid') return { status: 200, body: { order } };
+
     const paymentId = String(body.paymentId ?? '');
     const expected = createHmac('sha256', config.razorpay.keySecret)
       .update(`${order.payment.razorpayOrderId}|${paymentId}`)
@@ -79,6 +82,7 @@ export function registerPaymentRoutes(router, ctx) {
     await store.put('orders', order.id, order);
     await store.put('carts', user.id, { id: user.id, lines: [] });
     await ctx.syncOrder(order);
+    await ctx.audit(user.id, 'payment.verified', order.id, { total: order.total });
     await ctx.notifyOrder(order, 'placed', { paid: true });
 
     return { status: 200, body: { order } };
