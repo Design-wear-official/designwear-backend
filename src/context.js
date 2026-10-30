@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { createFirebaseVerifier } from './firebase_token.js';
 import { createLogger, redact } from './logger.js';
 import { createNotifier, orderMessage } from './notifications.js';
+import { acceptRemoteStatus } from './order_rules.js';
 import { NullOrderSync } from './order_sync.js';
 import { NullPush } from './push.js';
 import { receiptEmail } from './receipt.js';
@@ -216,7 +217,13 @@ export function createContext(deps) {
     try {
       const remote = await orderSync.pull(order);
       if (!remote || (remote.status === order.status && !remote.tracking)) return order;
-      const changed = remote.status !== order.status;
+      let changed = remote.status !== order.status;
+      if (changed && !acceptRemoteStatus(order.status, remote.status)) {
+        // Not a move the lifecycle allows (backwards, or out of a final status): keep ours.
+        logger.error(`Order ${order.id}: ignored status ${remote.status} from SethuCMS while ${order.status}`);
+        remote.status = order.status;
+        changed = false;
+      }
       if (changed) {
         order.status = remote.status;
         order.history = [...(order.history ?? []), { status: remote.status, at: new Date(now()).toISOString() }];

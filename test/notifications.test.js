@@ -121,6 +121,22 @@ describe('notifications', () => {
     assert.match(inbox.find((i) => i.title === 'Order on its way').body, /Delhivery TRK7/);
   });
 
+  it('the lifecycle holds: no going backwards from SethuCMS, and a customer cannot cancel once confirmed', async () => {
+    const order = await place();
+    records.get(order.id).status = 'delivered';
+    await call('GET', '/v1/orders');
+    records.get(order.id).status = 'placed';
+    const after = (await call('GET', '/v1/orders')).body.orders.find((o) => o.id === order.id);
+    assert.equal(after.status, 'delivered', 'a delivered order stays delivered');
+
+    const second = await place();
+    records.get(second.id).status = 'confirmed';
+    await call('GET', '/v1/orders');
+    const cancel = await call('POST', `/v1/orders/${second.id}/cancel`);
+    assert.equal(cancel.status, 409);
+    assert.equal(cancel.body.error.code, 'not_cancellable');
+  });
+
   it('the SethuCMS webhook notifies straight away, and rejects forgeries', async () => {
     const order = await place();
     records.get(order.id).status = 'confirmed';

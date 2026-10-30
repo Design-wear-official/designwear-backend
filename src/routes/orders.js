@@ -2,11 +2,10 @@
 import { randomBytes } from 'node:crypto';
 
 import { createFulfilment } from '../fulfilment.js';
+import { customerCanCancel } from '../order_rules.js';
 import { createPricing } from '../pricing.js';
 import * as v from '../validate.js';
 import { HttpError, bad } from '../validate.js';
-
-const CANCELLABLE = ['placed', 'awaiting_payment'];
 
 export function registerOrderRoutes(router, ctx) {
   const { config, store, now } = ctx;
@@ -116,7 +115,7 @@ export function registerOrderRoutes(router, ctx) {
     if (!order || order.userId !== user.id) {
       throw new HttpError(404, 'not_found');
     }
-    if (!CANCELLABLE.includes(order.status)) {
+    if (!customerCanCancel(order.status)) {
       throw new HttpError(409, 'not_cancellable', 'This order can no longer be cancelled.');
     }
 
