@@ -1,5 +1,5 @@
 // Sign up, sign in (password and Google), and password reset.
-import { randomInt } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 
 import { TokenError } from '../firebase_token.js';
 import { newId } from '../context.js';
@@ -10,6 +10,11 @@ import { HttpError } from '../validate.js';
 const HOUR_MS = 3600_000;
 const RESET_TTL_MS = 15 * 60 * 1000;
 const RESET_MAX_ATTEMPTS = 5;
+// Wrong passwords for one account: after this many inside the window, sign-in for
+// that account pauses. It counts per account, not per address, so a spread-out
+// attack is held too, and it applies to unknown emails alike (no way to tell them apart).
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_WINDOW_MS = 15 * 60_000;
 
 // Checked against when the account doesn't exist, so a login takes the same
 // time and gives the same answer either way.
@@ -54,6 +59,12 @@ export function registerAuthRoutes(router, ctx) {
     const email = v.email(body.email);
     ctx.limit(`login:${ctx.ipOf(req)}:${email}`, 10, 15 * 60_000);
 
+    const lockId = createHash('sha256').update(email).digest('hex').slice(0, 32);
+    const lock = (await store.get('lockouts', lockId)) ?? { id: lockId, count: 0, since: 0, until: 0 };
+    if (lock.until > now()) {
+      throw new HttpError(429, 'locked', 'Too many wrong passwords. Try again in a few minutes, or reset your password.');
+    }
+
     const user = await ctx.findUserByEmail(email);
     const supplied = String(body.password ?? '');
 
@@ -65,8 +76,19 @@ export function registerAuthRoutes(router, ctx) {
     }
 
     if (!passwordOk) {
+      const fresh = now() - lock.since > LOGIN_WINDOW_MS;
+      const count = (fresh ? 0 : lock.count) + 1;
+      const locked = count >= LOGIN_MAX_FAILURES;
+      await store.put('lockouts', lockId, {
+        id: lockId,
+        count,
+        since: fresh ? now() : lock.since,
+        until: locked ? now() + LOGIN_WINDOW_MS : 0,
+      });
+      await ctx.audit(`email:${lockId}`, locked ? 'auth.locked' : 'auth.login_failed', user?.id ?? 'unknown', { count });
       throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
     }
+    if (lock.count > 0) await store.put('lockouts', lockId, { id: lockId, count: 0, since: 0, until: 0 });
     return { status: 200, body: ctx.issue(user) };
   });
 

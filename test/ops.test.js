@@ -157,3 +157,32 @@ describe('payments, outbox and audit', () => {
     assert.equal(rows[0].attempts, 2);
   });
 });
+
+describe('sign-in lockout', () => {
+  const login = (email, password) => call('POST', '/v1/auth/login', { email, password }, { auth: null });
+  const register = (email) => call('POST', '/v1/auth/register', { name: 'T', email, password: 'password123' }, { auth: null });
+
+  it('five wrong passwords pause that account, even for the right password, and say nothing about whether it exists', async () => {
+    await register('lock@example.com');
+    for (let i = 0; i < 5; i += 1) assert.equal((await login('lock@example.com', 'nope-nope')).status, 401);
+    const blocked = await login('lock@example.com', 'password123');
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.body.error.code, 'locked');
+    assert.equal((await login('other@example.com', 'password123')).status, 401, 'other accounts are unaffected');
+
+    for (let i = 0; i < 5; i += 1) await login('ghost@example.com', 'nope-nope');
+    assert.equal((await login('ghost@example.com', 'nope-nope')).status, 429, 'unknown emails lock the same way');
+
+    const audit = await store.list('audit', (a) => a.action === 'auth.locked');
+    assert.ok(audit.length >= 2);
+    assert.ok(!JSON.stringify(audit).includes('lock@example.com'), 'no email in the audit log');
+  });
+
+  it('a correct sign-in clears the count', async () => {
+    await register('reset@example.com');
+    for (let i = 0; i < 4; i += 1) await login('reset@example.com', 'nope-nope');
+    assert.equal((await login('reset@example.com', 'password123')).status, 200);
+    for (let i = 0; i < 4; i += 1) assert.equal((await login('reset@example.com', 'nope-nope')).status, 401);
+    assert.equal((await login('reset@example.com', 'password123')).status, 200);
+  });
+});
