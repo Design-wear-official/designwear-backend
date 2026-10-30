@@ -11,7 +11,7 @@ export class WebhookMailer {
   }
   async send(to, subject, text, { html } = {}) {
     if (!this.url) {
-      if (this.printUnsent) console.log(`[mail:dev] to=${to} subject=${subject}\n${text}`);
+      if (this.printUnsent) console.log(`📧 mail:dev to=${to} subject=${subject}\n${text}`);
       else console.warn(`Mail not sent (MAIL_WEBHOOK_URL is not set): ${subject}`);
       return;
     }
