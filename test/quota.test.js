@@ -61,6 +61,8 @@ describe('daily AI limit', () => {
     assert.equal(blocked.status, 429);
     assert.equal(blocked.body.error.code, 'ai_daily_limit');
     assert.match(blocked.body.error.message, /3 free AI creations/);
+    assert.match(blocked.body.error.message, /coming soon/);
+    assert.ok(!/upgrade/i.test(blocked.body.error.message), 'no upgrade button exists yet');
     assert.deepEqual([blocked.body.error.details.plan, blocked.body.error.details.limit, blocked.body.error.details.used], ['free', 3, 3]);
 
     const usage = (await call('GET', '/v1/me/ai-usage', undefined, u.auth)).body;

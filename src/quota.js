@@ -49,7 +49,7 @@ export function createQuota({ store, config, now }) {
         429,
         'ai_daily_limit',
         `You've used your ${state.limit} ${who} AI creations for today. They reset at midnight (India time).` +
-          (state.plan === 'ultra' ? '' : ' Upgrade your plan for more.'),
+          (state.plan === 'free' ? ' Pro and Ultra plans with more creations are coming soon.' : ''),
       );
       error.details = { plan: state.plan, limit: state.limit, used: state.used, resetsAt: state.resetsAt };
       throw error;
