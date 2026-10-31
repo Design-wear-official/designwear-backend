@@ -74,9 +74,16 @@ describe('Gemini models', () => {
     const ai = new AiProvider(loadConfig({ GEMINI_API_KEY: 'k', GEMINI_TIMEOUT_MS: '30' }), (url, init) =>
       new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))),
     );
-    await assert.rejects(
-      () => ai.designAgent({ message: 'hi', history: [], images: [], design: '{}' }),
-      (error) => error.status === 504 && error.code === 'ai_timeout',
-    );
+    // AbortSignal.timeout does not keep Node alive by itself (in the server the open
+    // request does), so hold the loop open while the test waits for it.
+    const hold = setTimeout(() => {}, 5000);
+    try {
+      await assert.rejects(
+        () => ai.designAgent({ message: 'hi', history: [], images: [], design: '{}' }),
+        (error) => error.status === 504 && error.code === 'ai_timeout',
+      );
+    } finally {
+      clearTimeout(hold);
+    }
   });
 });
