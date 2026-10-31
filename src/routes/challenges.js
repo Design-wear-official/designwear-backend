@@ -1,4 +1,5 @@
 // Weekly design challenges.
+import { PLANS } from '../quota.js';
 import * as v from '../validate.js';
 import { HttpError, bad } from '../validate.js';
 
@@ -51,5 +52,22 @@ export function registerChallengeRoutes(router, ctx, presenters) {
     await store.put('challenges', challenge.id, challenge);
 
     return { status: 200, body: { challenge: await publicChallenge(challenge) } };
+  });
+
+  // Admin: set a person's plan (free, pro or ultra), optionally until a date.
+  router.route('PUT', '/v1/admin/users/:userId/plan', async ({ req, params }) => {
+    ctx.requireAdmin(req);
+    const body = await ctx.readBody(req);
+    if (!PLANS.includes(body.plan)) throw bad('invalid_plan', `Plan must be one of ${PLANS.join(', ')}.`);
+    const until = body.until ? new Date(body.until) : null;
+    if (until && Number.isNaN(until.getTime())) throw bad('invalid_until', 'until must be a date.');
+
+    const user = await store.get('users', params.userId);
+    if (!user) throw new HttpError(404, 'not_found');
+    user.plan = body.plan;
+    user.planUntil = until ? until.toISOString() : null;
+    await store.put('users', user.id, user);
+    await ctx.audit('admin', 'user.plan', user.id, { plan: user.plan, until: user.planUntil });
+    return { status: 200, body: { id: user.id, plan: user.plan, planUntil: user.planUntil } };
   });
 }

@@ -99,7 +99,7 @@ export function createHandler({ ctx, router }) {
     } catch (error) {
       if (error instanceof HttpError) {
         return sendJson(error.status, {
-          error: { code: error.code, message: error.message },
+          error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) },
         });
       }
       logger.error(`Unhandled error (request ${requestId}): ${error.message}`, error);

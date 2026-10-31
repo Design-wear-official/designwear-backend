@@ -14,6 +14,12 @@ export function registerAccountRoutes(router, ctx) {
     body: { user: publicUser((await ctx.authed(req))) },
   }));
 
+  // Today's AI allowance for this person.
+  router.route('GET', '/v1/me/ai-usage', async ({ req }) => ({
+    status: 200,
+    body: await ctx.quota.usage(await ctx.authed(req)),
+  }));
+
   router.route('PATCH', '/v1/me', async ({ req }) => {
     const user = await ctx.authed(req);
     const body = await ctx.readBody(req);

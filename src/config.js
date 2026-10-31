@@ -84,6 +84,12 @@ export function loadConfig(env = process.env) {
       from: env.MAIL_FROM ?? '',
     },
     supportEmail: env.SUPPORT_EMAIL ?? '',
+    // Generative AI uses (assistant message, design image or try-on) per person per day.
+    aiDailyLimits: {
+      free: Number(env.AI_DAILY_FREE ?? 3),
+      pro: Number(env.AI_DAILY_PRO ?? 30),
+      ultra: Number(env.AI_DAILY_ULTRA ?? 100),
+    },
     // debug | info | warning | error: request lines below this level are dropped.
     logLevel: env.LOG_LEVEL ?? 'info',
     // Enables /v1/admin/* (create weekly challenges). Unset = those routes don't exist.

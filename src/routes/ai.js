@@ -42,7 +42,13 @@ export function registerAiRoutes(router, ctx) {
       if (!item?.imageUrl) throw bad('unknown_product');
     }
 
-    return { status: 200, body: { image: await ai.tryOn(photo, item, garment) } };
+    const use = await ctx.quota.take(user);
+    try {
+      return { status: 200, body: { image: await ai.tryOn(photo, item, garment) } };
+    } catch (error) {
+      await use.release();
+      throw error;
+    }
   });
 
   // Design Studio assistant. Returns the reply text and, when the model
@@ -71,8 +77,16 @@ export function registerAiRoutes(router, ctx) {
         ? JSON.stringify(body.design).slice(0, 60_000)
         : '{}';
 
-    const reply = await ai.designAgent({ message, history, images, design });
-    return { status: 200, body: reply };
+    const use = await ctx.quota.take(user);
+    try {
+      const reply = await ai.designAgent({ message, history, images, design });
+      // A design edit comes with a pass for its graphic: one creation, not two.
+      if (reply.design) reply.imagePass = await ctx.quota.grantPass(user);
+      return { status: 200, body: reply };
+    } catch (error) {
+      await use.release();
+      throw error;
+    }
   });
 
   router.route('POST', '/v1/ai/design-image', async ({ req }) => {
@@ -81,6 +95,14 @@ export function registerAiRoutes(router, ctx) {
 
     const body = await ctx.readBody(req);
     const prompt = v.str(String(body.prompt ?? ''), 'prompt', { max: 400 });
-    return { status: 200, body: { image: await ai.designImage(prompt) } };
+    // The graphic for a design the assistant just made is covered by its pass.
+    const covered = body.pass ? await ctx.quota.redeemPass(user, String(body.pass)) : false;
+    const use = covered ? null : await ctx.quota.take(user);
+    try {
+      return { status: 200, body: { image: await ai.designImage(prompt) } };
+    } catch (error) {
+      await use?.release();
+      throw error;
+    }
   });
 }

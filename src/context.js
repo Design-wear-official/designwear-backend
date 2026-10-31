@@ -8,6 +8,7 @@ import { createNotifier, orderMessage } from './notifications.js';
 import { acceptRemoteStatus } from './order_rules.js';
 import { NullOrderSync } from './order_sync.js';
 import { NullPush } from './push.js';
+import { createQuota, planOf } from './quota.js';
 import { receiptEmail } from './receipt.js';
 import { RateLimiter, safeEqual, signToken, verifyToken } from './security.js';
 import { HttpError, bad } from './validate.js';
@@ -43,6 +44,7 @@ export function createContext(deps) {
     createFirebaseVerifier({ projectId: config.firebaseProjectId, now });
 
   const limiter = new RateLimiter();
+  const quota = createQuota({ store, config, now });
 
   // Who did what, kept apart from the request logs and kept longer. Never throws:
   // an audit failure is logged, and the action itself still goes through.
@@ -277,7 +279,7 @@ export function createContext(deps) {
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
     ipOf, limit, authed, optionalUser, issue, readBody, requireAdmin,
-    syncOrder, refreshOrder, notifier, notifyOrder, resendReceipt, audit, readRaw,
+    syncOrder, refreshOrder, notifier, notifyOrder, resendReceipt, audit, quota, readRaw,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }
@@ -288,5 +290,6 @@ export function publicUser(user) {
     name: user.name,
     email: user.email,
     phone: user.phone ?? '',
+    plan: planOf(user, Date.now()),
   };
 }

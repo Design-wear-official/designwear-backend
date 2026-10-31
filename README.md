@@ -42,6 +42,7 @@ Loaded from the environment, or from `.env` (`.env.example` lists them all):
 | `SETHUCMS_URL`, `SETHUCMS_CONNECTION_ID`, `SETHUCMS_TOKEN` | the catalog source; use a read-only token |
 | `FIREBASE_PROJECT_ID` | enables Google sign-in |
 | `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_IMAGE_MODEL` | the assistant, graphics, try-on |
+| `AI_DAILY_FREE`, `AI_DAILY_PRO`, `AI_DAILY_ULTRA` | AI creations per person per day (default 3, 30, 100) |
 | `DESIGNWEAR_ADMIN_TOKEN` | enables the challenge admin route |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | online payments |
 | `IMAGE_HOSTS`, `DESIGNWEAR_DATA_FILE`, `DESIGNWEAR_CLIENT_LOG_FILE`, `TRUST_PROXY` | optional |
