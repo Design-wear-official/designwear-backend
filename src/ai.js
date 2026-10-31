@@ -65,6 +65,13 @@ export class AiProvider {
     this.logger = logger;
   }
 
+  // The assistant's instructions: the licensed titles first (they come from our own
+  // settings), then the current design, which is user content and so goes in last.
+  designPrompt(design) {
+    const licensed = (this.gemini.licensedTitles ?? []).join(', ') || 'none';
+    return DESIGN_PROMPT.replace('{{LICENSED}}', () => licensed).replace('{{CURRENT_STATE}}', () => design);
+  }
+
   /** The Design Studio assistant (text model). */
   get agentConfigured() {
     return Boolean(this.gemini.apiKey);
@@ -181,7 +188,7 @@ export class AiProvider {
 
     const response = await this.generate(this.gemini.model, {
       systemInstruction: {
-        parts: [{ text: DESIGN_PROMPT.replace('{{CURRENT_STATE}}', design) }],
+        parts: [{ text: this.designPrompt(design) }],
       },
       contents,
       generationConfig: {

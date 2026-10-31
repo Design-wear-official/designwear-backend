@@ -73,6 +73,9 @@ export function loadConfig(env = process.env) {
       thinkingLevel: env.GEMINI_THINKING_LEVEL ?? 'low',
       // Give up on Google before the host's own 60 s limit, so the app gets a clear error.
       timeoutMs: Number(env.GEMINI_TIMEOUT_MS ?? 50_000),
+      // Titles (films, shows, brands) the owner has written permission to print. Only these
+      // may use their names, characters and logos; everything else protected stays declined.
+      licensedTitles: list(env.AI_LICENSED_TITLES),
     },
     mailWebhookUrl: env.MAIL_WEBHOOK_URL ?? '',
     // SMTP (preferred over the webhook when SMTP_HOST is set). MAIL_FROM is "Name <a@b.c>".
