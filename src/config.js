@@ -64,8 +64,8 @@ export function loadConfig(env = process.env) {
     razorpay: { keyId: env.RAZORPAY_KEY_ID ?? '', keySecret: env.RAZORPAY_KEY_SECRET ?? '' },
     gemini: {
       apiKey: env.GEMINI_API_KEY ?? '',
-      // Chat uses Gemini 4 Argon. Confirm the ID in Google AI Studio's model list.
-      model: env.GEMINI_MODEL ?? 'gemini-4-argon',
+      // Chat uses Gemini 3.8 Flash. Confirm the ID in Google AI Studio's model list.
+      model: env.GEMINI_MODEL ?? 'gemini-3.8-flash',
       // Try-on must return an image, so it has its own model setting.
       imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-4-argon',
     },
