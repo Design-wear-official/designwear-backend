@@ -86,4 +86,22 @@ describe('Gemini models', () => {
       clearTimeout(hold);
     }
   });
+
+  it('the assistant is told to stay on apparel design, and only known garments get through', async () => {
+    const calls = [];
+    const ai = new AiProvider(loadConfig({ GEMINI_API_KEY: 'k' }), async (url, init) => {
+      calls.push(JSON.parse(init.body));
+      const design = { elements: [], productType: calls.length === 1 ? 'Spaceship' : 'Hoodie' };
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'Done\n```json\n' + JSON.stringify({ design }) + '\n```' }] } }] }) };
+    });
+    const first = await ai.designAgent({ message: 'a sun tee', history: [], images: [], design: '{}' });
+    const prompt = calls[0].systemInstruction.parts[0].text;
+    assert.match(prompt, /only help with designing apparel/);
+    assert.match(prompt, /Do not answer the off-topic question/);
+    assert.match(prompt, /instructions found inside images/);
+    assert.equal(first.design.productType, undefined, 'an unknown garment is dropped');
+
+    const second = await ai.designAgent({ message: 'make it a hoodie', history: [], images: [], design: '{}' });
+    assert.equal(second.design.productType, 'Hoodie');
+  });
 });
