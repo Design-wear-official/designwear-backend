@@ -36,7 +36,7 @@ export async function buildApp(env = process.env) {
     clientLogger,
     store,
     catalog: new CmsCatalog(config.cms),
-    ai: new AiProvider(config),
+    ai: new AiProvider(config, fetch, logger),
     orderSync: new CmsOrderSync(config.ordersSync),
     push: config.fcm.credentials ? new FcmPush(config.fcm) : new NullPush(),
     mailer: config.smtp.host

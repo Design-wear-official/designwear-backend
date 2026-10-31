@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 
+import { redact } from './logger.js';
 import { HttpError } from './validate.js';
 
 const DESIGN_PROMPT = readFileSync(new URL('./design_prompt.txt', import.meta.url), 'utf8');
@@ -52,9 +53,10 @@ function parseDesignEdit(jsonText) {
 }
 
 export class AiProvider {
-  constructor({ gemini }, fetchImpl = fetch) {
+  constructor({ gemini }, fetchImpl = fetch, logger = null) {
     this.gemini = gemini;
     this.fetch = fetchImpl;
+    this.logger = logger;
   }
 
   /** The Design Studio assistant (text model). */
@@ -67,8 +69,10 @@ export class AiProvider {
   }
 
   // POSTs a generateContent request to one of the Gemini models.
-  generate(model, payload) {
-    return this.fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent`, {
+  // When Google refuses, the reason goes to the logs (the customer only sees a
+  // generic message), so a blocked key or a wrong model name is easy to spot.
+  async generate(model, payload) {
+    const response = await this.fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -76,6 +80,12 @@ export class AiProvider {
       },
       body: JSON.stringify(payload),
     });
+    if (!response.ok && this.logger) {
+      const detail = await response.json().catch(() => null);
+      const reason = detail?.error ? `${detail.error.status ?? ''} ${detail.error.message ?? ''}` : '';
+      this.logger.error(`Gemini ${model} answered ${response.status}: ${redact(reason).slice(0, 300)}`);
+    }
+    return response;
   }
 
   async tryOn(photo, product, garmentBytes = null) {
