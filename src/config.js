@@ -87,6 +87,8 @@ export function loadConfig(env = process.env) {
       from: env.MAIL_FROM ?? '',
     },
     supportEmail: env.SUPPORT_EMAIL ?? '',
+    // This API's public address, used in print-sheet links sent to the print team.
+    publicApiUrl: env.PUBLIC_API_URL ?? '',
     // Generative AI uses (assistant message, design image or try-on) per person per day.
     aiDailyLimits: {
       free: Number(env.AI_DAILY_FREE ?? 3),

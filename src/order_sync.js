@@ -5,7 +5,7 @@
 // unknown ones: id (key), createdAt, updatedAt, status, customerName,
 // customerEmail, customerPhone, address, city, state, pin, items, itemCount,
 // subtotal, tax, total, paymentMethod, paymentStatus, teamId, teamName,
-// trackingId, carrier.
+// trackingId, carrier, printFiles.
 
 const TIMEOUT_MS = 6000;
 
@@ -14,7 +14,8 @@ export const ORDER_STATUSES = [
 ];
 const FINAL = ['delivered', 'cancelled'];
 
-export function orderRecord(order, customer) {
+// `linkFor(printJobId)` gives the print-sheet link for a custom line ('' when none).
+export function orderRecord(order, customer, linkFor = () => '') {
   const items = order.lines
     .map((line) => `${line.title} (${line.size}) x${line.quantity}`)
     .join('; ');
@@ -41,6 +42,11 @@ export function orderRecord(order, customer) {
     teamName: order.team?.name ?? '',
     trackingId: order.tracking?.id ?? '',
     carrier: order.tracking?.carrier ?? '',
+    // One line per custom design: what to print and where to open its print sheet.
+    printFiles: order.lines
+      .filter((line) => line.printJobId && linkFor(line.printJobId))
+      .map((line) => `${line.title} (${line.size}) x${line.quantity}: ${linkFor(line.printJobId)}`)
+      .join('\n'),
   };
 }
 
@@ -85,9 +91,9 @@ export class CmsOrderSync {
 
   // Creates the record, or updates it when it already exists. Safe to repeat:
   // a retried write with the same key is not applied twice.
-  async push(order, customer) {
+  async push(order, customer, linkFor) {
     if (!this.enabled) return;
-    const record = orderRecord(order, customer);
+    const record = orderRecord(order, customer, linkFor);
     const version = order.history?.length ?? 0;
 
     const { id, ...changes } = record;

@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { createFirebaseVerifier } from './firebase_token.js';
 import { createLogger, redact } from './logger.js';
 import { createNotifier, orderMessage } from './notifications.js';
+import { printLink } from './print.js';
 import { acceptRemoteStatus } from './order_rules.js';
 import { NullOrderSync } from './order_sync.js';
 import { NullPush } from './push.js';
@@ -182,7 +183,7 @@ export function createContext(deps) {
     if (!orderSync.enabled) return;
     try {
       const customer = await store.get('users', order.userId);
-      await orderSync.push(order, customer);
+      await orderSync.push(order, customer, (jobId) => printLink(config.publicApiUrl, jobId, config.jwtSecret));
     } catch (error) {
       logger.error(`Order sync failed for ${order.id}: ${error.message}`, error);
     }
