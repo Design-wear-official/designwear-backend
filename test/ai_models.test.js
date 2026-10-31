@@ -5,10 +5,10 @@ import { AiProvider } from '../src/ai.js';
 import { loadConfig } from '../src/config.js';
 
 describe('Gemini models', () => {
-  it('uses gemini-3.8-flash for chat and gemini-4-argon for images unless overridden', () => {
+  it('uses gemini-3.8-flash for chat and gemini-nano-banana-2.1 for images unless overridden', () => {
     const config = loadConfig({ GEMINI_API_KEY: 'k' });
     assert.equal(config.gemini.model, 'gemini-3.8-flash');
-    assert.equal(config.gemini.imageModel, 'gemini-4-argon');
+    assert.equal(config.gemini.imageModel, 'gemini-nano-banana-2.1');
     const custom = loadConfig({ GEMINI_API_KEY: 'k', GEMINI_MODEL: 'a', GEMINI_IMAGE_MODEL: 'b' });
     assert.deepEqual([custom.gemini.model, custom.gemini.imageModel], ['a', 'b']);
   });
@@ -24,7 +24,7 @@ describe('Gemini models', () => {
     });
 
     assert.equal(await ai.designImage('a sunrise'), 'QUJD');
-    assert.match(calls[0].url, /models\/gemini-4-argon:generateContent/);
+    assert.match(calls[0].url, /models\/gemini-nano-banana-2\.1:generateContent/);
     assert.deepEqual(calls[0].body.generationConfig.responseModalities, ['TEXT', 'IMAGE']);
 
     await ai.designAgent({ message: 'hi', history: [], images: [], design: '{}' });

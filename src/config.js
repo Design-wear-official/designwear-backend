@@ -67,7 +67,7 @@ export function loadConfig(env = process.env) {
       // Chat uses Gemini 3.8 Flash. Confirm the ID in Google AI Studio's model list.
       model: env.GEMINI_MODEL ?? 'gemini-3.8-flash',
       // Try-on must return an image, so it has its own model setting.
-      imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-4-argon',
+      imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-nano-banana-2.1',
     },
     mailWebhookUrl: env.MAIL_WEBHOOK_URL ?? '',
     // SMTP (preferred over the webhook when SMTP_HOST is set). MAIL_FROM is "Name <a@b.c>".
