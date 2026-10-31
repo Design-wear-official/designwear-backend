@@ -72,14 +72,25 @@ export class AiProvider {
   // When Google refuses, the reason goes to the logs (the customer only sees a
   // generic message), so a blocked key or a wrong model name is easy to spot.
   async generate(model, payload) {
-    const response = await this.fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': this.gemini.apiKey,
-      },
-      body: JSON.stringify(payload),
-    });
+    let response;
+    try {
+      response = await this.fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-goog-api-key': this.gemini.apiKey,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(this.gemini.timeoutMs ?? 50_000),
+      });
+    } catch (error) {
+      const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      this.logger?.error(`Gemini ${model} ${timedOut ? 'timed out' : `request failed: ${error.message}`}`);
+      if (timedOut) {
+        throw new HttpError(504, 'ai_timeout', 'The assistant took too long. Try a shorter or simpler request.');
+      }
+      throw new HttpError(502, 'ai_error', 'The assistant is unavailable right now.');
+    }
     if (!response.ok && this.logger) {
       const detail = await response.json().catch(() => null);
       const reason = detail?.error ? `${detail.error.status ?? ''} ${detail.error.message ?? ''}` : '';
@@ -167,7 +178,11 @@ export class AiProvider {
         parts: [{ text: DESIGN_PROMPT.replace('{{CURRENT_STATE}}', design) }],
       },
       contents,
-      generationConfig: { maxOutputTokens: 2000 },
+      generationConfig: {
+        // The limit counts thinking too, so leave room for a full design after it.
+        maxOutputTokens: 4000,
+        ...(this.gemini.thinkingLevel ? { thinkingConfig: { thinkingLevel: this.gemini.thinkingLevel } } : {}),
+      },
     });
     if (!response.ok) {
       throw new HttpError(502, 'ai_error', 'The assistant is unavailable right now.');

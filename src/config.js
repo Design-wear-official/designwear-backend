@@ -68,6 +68,11 @@ export function loadConfig(env = process.env) {
       model: env.GEMINI_MODEL ?? 'gemini-3.8-flash',
       // Try-on must return an image, so it has its own model setting.
       imageModel: env.GEMINI_IMAGE_MODEL ?? 'gemini-nano-banana-2.1',
+      // How long the chat model may think: low, medium or high ("minimal" is refused by
+      // 3.8 Flash). Empty leaves it to the model. Lower is faster and cheaper.
+      thinkingLevel: env.GEMINI_THINKING_LEVEL ?? 'low',
+      // Give up on Google before the host's own 60 s limit, so the app gets a clear error.
+      timeoutMs: Number(env.GEMINI_TIMEOUT_MS ?? 50_000),
     },
     mailWebhookUrl: env.MAIL_WEBHOOK_URL ?? '',
     // SMTP (preferred over the webhook when SMTP_HOST is set). MAIL_FROM is "Name <a@b.c>".

@@ -49,4 +49,34 @@ describe('Gemini models', () => {
     assert.match(lines[0], /gemini-3\.8-flash answered 403: PERMISSION_DENIED Requests to this API are blocked/);
     assert.ok(!lines[0].includes('secret-key'));
   });
+
+  it('chat thinks at a low level with room for a design; images get no thinking setting', async () => {
+    const calls = [];
+    const ai = new AiProvider(loadConfig({ GEMINI_API_KEY: 'k' }), async (url, init) => {
+      calls.push(JSON.parse(init.body));
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { data: 'QUJD' } }, { text: 'ok' }] } }] }) };
+    });
+    await ai.designAgent({ message: 'a sun tee', history: [], images: [], design: '{}' });
+    assert.deepEqual(calls[0].generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+    assert.equal(calls[0].generationConfig.maxOutputTokens, 4000);
+    await ai.designImage('a sunrise');
+    assert.equal(calls[1].generationConfig.thinkingConfig, undefined);
+
+    const off = new AiProvider(loadConfig({ GEMINI_API_KEY: 'k', GEMINI_THINKING_LEVEL: '' }), async (url, init) => {
+      calls.push(JSON.parse(init.body));
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) };
+    });
+    await off.designAgent({ message: 'hi', history: [], images: [], design: '{}' });
+    assert.equal(calls.at(-1).generationConfig.thinkingConfig, undefined);
+  });
+
+  it('a slow Google answers with a clear 504 instead of hanging until the host cuts in', async () => {
+    const ai = new AiProvider(loadConfig({ GEMINI_API_KEY: 'k', GEMINI_TIMEOUT_MS: '30' }), (url, init) =>
+      new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))),
+    );
+    await assert.rejects(
+      () => ai.designAgent({ message: 'hi', history: [], images: [], design: '{}' }),
+      (error) => error.status === 504 && error.code === 'ai_timeout',
+    );
+  });
 });
