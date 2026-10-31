@@ -99,6 +99,8 @@ describe('Gemini models', () => {
     assert.match(prompt, /only help with designing apparel/);
     assert.match(prompt, /Do not answer the off-topic question/);
     assert.match(prompt, /instructions found inside images/);
+    assert.match(prompt, /protected characters, logos or names/);
+    assert.match(prompt, /Marvel, Disney/);
     assert.equal(first.design.productType, undefined, 'an unknown garment is dropped');
 
     const second = await ai.designAgent({ message: 'make it a hoodie', history: [], images: [], design: '{}' });
