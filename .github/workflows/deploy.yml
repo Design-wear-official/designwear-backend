@@ -1,0 +1,69 @@
+name: Deploy API (Vercel)
+
+# On every push to main: run the tests, deploy a clean copy to Vercel, then check the live API.
+# A failing test stops the deploy; a failing health check fails the run so you hear about it.
+# Needs the repository secrets VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID. The settings the
+# API runs on (database, keys, origins) live in the Vercel project, not here.
+# Optional repository variable API_URL: the public address to check (default below).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", ".env.example"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Test, deploy and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      API_URL: ${{ vars.API_URL || 'https://designwear-api.vercel.app' }}
+    steps:
+      - name: Check Vercel credentials
+        run: |
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set (see the documentation repo, 07-deployment)."
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: node --test
+
+      # A clean copy of the commit, outside git: the CLI would otherwise attach the commit author,
+      # and Vercel blocks the deploy when that account is not on the Vercel team.
+      - name: Deploy to Vercel (production)
+        run: |
+          site="$RUNNER_TEMP/api"
+          mkdir -p "$site"
+          git archive HEAD | tar -x -C "$site"
+          cd "$site"
+          npx --yes vercel@65.5.0 deploy --prod --yes
+
+      # Aliases can take a few seconds to move, so try a few times before giving up.
+      - name: Check the live API
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/v1/health/live" || true)
+            [ "$code" = "200" ] && break
+            echo "Attempt $attempt: /v1/health/live answered $code"; sleep 10
+          done
+          if [ "$code" != "200" ]; then echo "::error::The API is not answering at $API_URL"; exit 1; fi
+          deep=$(curl -s "$API_URL/v1/health?deep=1" || true)
+          echo "Deep health: $deep"
+          if ! echo "$deep" | grep -q '"ok":true'; then echo "::error::Deep health check failed (database or catalog)"; exit 1; fi
