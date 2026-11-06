@@ -104,6 +104,14 @@ export function loadConfig(env = process.env) {
     // CDN's own CORS list). Comma-separated hosts; only /images/<project>/... paths.
     imageHosts: list(env.IMAGE_HOSTS ?? 'cdn.sanity.io'),
     adminToken: env.DESIGNWEAR_ADMIN_TOKEN ?? '',
+    // Returns: days after delivery a customer may ask for one.
+    returnWindowDays: Number(env.RETURN_WINDOW_DAYS ?? 7),
+    // Vendor payouts: DesignWear keeps this percentage of each delivered order's subtotal.
+    commissionPct: Number(env.VENDOR_COMMISSION_PCT ?? 15),
+    // Team stock below this many units is reported as low.
+    lowStockAt: Number(env.LOW_STOCK_AT ?? 5),
+    // Write access to SethuCMS `team_stock`, so vendors can update their own stock. Unset = read only.
+    stockToken: env.SETHUCMS_STOCK_TOKEN ?? '',
   };
 
   if (production) {

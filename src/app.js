@@ -16,7 +16,10 @@ import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerOrderRoutes } from './routes/orders.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerPaymentRoutes } from './routes/payments.js';
+import { registerPayoutRoutes } from './routes/payouts.js';
+import { registerReturnRoutes } from './routes/returns.js';
 import { registerStaffRoutes } from './routes/staff.js';
+import { registerStockRoutes } from './routes/stock.js';
 import { registerSystemRoutes } from './routes/system.js';
 
 export function createApp(deps) {
@@ -31,6 +34,9 @@ export function createApp(deps) {
   registerOrderRoutes(router, ctx);
   registerPrintRoutes(router, ctx);
   registerStaffRoutes(router, ctx);
+  registerReturnRoutes(router, ctx);
+  registerPayoutRoutes(router, ctx);
+  registerStockRoutes(router, ctx);
   registerNotificationRoutes(router, ctx);
   registerHookRoutes(router, ctx);
   registerPaymentRoutes(router, ctx);

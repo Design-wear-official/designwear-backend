@@ -602,6 +602,392 @@
         ]
       }
     },
+    "/v1/orders/{orderId}/return": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Customer: ask to return a delivered order inside the return window",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/returns": {
+      "get": {
+        "tags": [
+          "returns"
+        ],
+        "summary": "Customer: my return requests",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/staff/returns": {
+      "get": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "Return requests (vendors: own team)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/staff/returns/{returnId}/decision": {
+      "post": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "Desk or owner: approve or reject a requested return",
+        "parameters": [
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "reject"
+                    ]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "decision"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/staff/returns/{returnId}/refund": {
+      "post": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "Owner: pay an approved return back (Razorpay refund for online payments, recorded by hand for cash on delivery)",
+        "parameters": [
+          {
+            "name": "returnId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/staff/payouts": {
+      "get": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "What each team is owed (vendors: own team) and past payouts",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "Owner: settle a team; covers delivered orders not yet paid out, less clawbacks for refunds",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "teamId": {
+                    "type": "string"
+                  },
+                  "reference": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "teamId"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/staff/stock": {
+      "get": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "A team's stock by product, flagged when low (vendors: own team)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "Set the units a team has of a product (vendors: own team only)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Sign in required"
+          },
+          "403": {
+            "description": "Not allowed for this role"
+          },
+          "409": {
+            "description": "Not allowed in the current state"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "teamId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "productId",
+                  "quantity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/notifications": {
       "get": {
         "tags": [
@@ -1010,42 +1396,6 @@
             "description": "OK"
           }
         }
-      }
-    }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearer": {
-        "type": "http",
-        "scheme": "bearer"
-      },
-      "adminToken": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "DESIGNWEAR_ADMIN_TOKEN"
-      }
-    },
-    "schemas": {
-      "Status": {
-        "type": "string",
-        "enum": [
-          "awaiting_payment",
-          "placed",
-          "confirmed",
-          "packed",
-          "shipped",
-          "delivered",
-          "cancelled"
-        ]
-      },
-      "Role": {
-        "type": "string",
-        "enum": [
-          "vendor",
-          "desk",
-          "delivery",
-          "owner"
-        ]
       }
     }
   }

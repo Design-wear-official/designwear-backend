@@ -76,6 +76,31 @@ export class CmsCatalog {
     return Math.max(0, Number(row?.quantity ?? 0) || 0);
   }
 
+  /** Every stock row a team has: [{ productId, quantity }]. */
+  async stockOf(teamId) {
+    const rows = await this.#collection('team_stock', { optional: true });
+    return rows
+      .filter((r) => String(r.teamId) === teamId)
+      .map((r) => ({ productId: String(r.productId), quantity: Math.max(0, Number(r.quantity ?? 0) || 0) }));
+  }
+
+  /**
+   * Sets a team's units of a product in `team_stock` (updates the row, or adds one).
+   * Needs a token with write access (SETHUCMS_STOCK_TOKEN); the catalog token is read only.
+   */
+  async setTeamStock(teamId, productId, quantity, writeToken) {
+    if (!writeToken) throw new Error('stock_writes_disabled');
+    const rows = await this.#collection('team_stock', { optional: true });
+    const row = rows.find((r) => String(r.teamId) === teamId && String(r.productId) === productId);
+    const base = `${this.url}/v1/connections/${encodeURIComponent(this.connectionId)}/collections/team_stock/records`;
+    const headers = { authorization: `Bearer ${writeToken}`, 'content-type': 'application/json' };
+    const res = row?.id
+      ? await this.fetchImpl(`${base}/${encodeURIComponent(row.id)}`, { method: 'PATCH', headers, redirect: 'error', body: JSON.stringify({ quantity }) })
+      : await this.fetchImpl(base, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ teamId, productId, quantity }) });
+    if (!res.ok) throw new Error(`stock_write_failed:${res.status}`);
+    this.caches.delete('team_stock'); // the next read sees the change
+  }
+
   // Raw records of one collection, cached briefly. One refresh at a time:
   // concurrent requests on a cold cache share it instead of each paging.
   async #collection(name, { optional = false } = {}) {
