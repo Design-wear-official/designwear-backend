@@ -128,6 +128,16 @@ export function createContext(deps) {
     return user;
   }
 
+  // A signed-in staff member ({ id, name, role, teamId }), or 401/403. `roles` narrows who may call.
+  async function staffUser(req, roles) {
+    const user = await authed(req);
+    const role = user.staff?.role;
+    if (!role || (roles && !roles.includes(role))) {
+      throw new HttpError(403, 'forbidden', 'This account cannot do that.');
+    }
+    return { id: user.id, name: user.name, role, teamId: user.staff.teamId };
+  }
+
   // Like authed(), but signed-out callers get null instead of an error.
   async function optionalUser(req) {
     try {
@@ -279,7 +289,7 @@ export function createContext(deps) {
 
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
-    ipOf, limit, authed, optionalUser, issue, readBody, requireAdmin,
+    ipOf, limit, authed, staffUser, optionalUser, issue, readBody, requireAdmin,
     syncOrder, refreshOrder, notifier, notifyOrder, resendReceipt, audit, quota, readRaw,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
@@ -292,5 +302,6 @@ export function publicUser(user) {
     email: user.email,
     phone: user.phone ?? '',
     plan: planOf(user, Date.now()),
+    staff: user.staff ?? null,
   };
 }

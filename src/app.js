@@ -16,6 +16,7 @@ import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerOrderRoutes } from './routes/orders.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerPaymentRoutes } from './routes/payments.js';
+import { registerStaffRoutes } from './routes/staff.js';
 import { registerSystemRoutes } from './routes/system.js';
 
 export function createApp(deps) {
@@ -29,6 +30,7 @@ export function createApp(deps) {
   registerCartRoutes(router, ctx);
   registerOrderRoutes(router, ctx);
   registerPrintRoutes(router, ctx);
+  registerStaffRoutes(router, ctx);
   registerNotificationRoutes(router, ctx);
   registerHookRoutes(router, ctx);
   registerPaymentRoutes(router, ctx);
