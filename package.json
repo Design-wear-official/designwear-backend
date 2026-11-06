@@ -6,7 +6,8 @@
   "description": "DesignWear API: auth, carts, orders, community designs, search and AI. No dependencies.",
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "openapi": "node scripts/openapi.mjs"
   },
   "engines": { "node": ">=20" }
 }
