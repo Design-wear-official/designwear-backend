@@ -8,7 +8,7 @@ export function createRouter() {
       keys.push(key);
       return '([^/]+)';
     });
-    routes.push({ method, re: new RegExp(`^${source}$`), keys, handler });
+    routes.push({ method, pattern, re: new RegExp(`^${source}$`), keys, handler });
   }
 
   // The route for this method and path, with its decoded :params, or null.
@@ -31,5 +31,8 @@ export function createRouter() {
     return routes.some((r) => r.re.test(pathname));
   }
 
-  return { route, match, pathExists };
+  // Every registered route as { method, pattern }, for the OpenAPI spec and its drift test.
+  const list = () => routes.map(({ method, pattern }) => ({ method, pattern }));
+
+  return { route, match, pathExists, list };
 }

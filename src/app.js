@@ -37,5 +37,7 @@ export function createApp(deps) {
   registerCatalogRoutes(router, ctx);
   registerAiRoutes(router, ctx);
 
-  return createHandler({ ctx, router });
+  const handler = createHandler({ ctx, router });
+  handler.routes = router.list; // lets the OpenAPI drift test and spec generator see every route
+  return handler;
 }

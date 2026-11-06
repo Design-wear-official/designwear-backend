@@ -1,5 +1,4 @@
-// The order lifecycle: which statuses exist, which moves are allowed, who may
-// make them. The API, vms and scm all follow these rules.
+// GENERATED from the `orders` repo (src/lifecycle.js) by scripts/sync-lifecycle.mjs. Do not edit here; change it there and sync.
 
 export const STATUSES = [
   'awaiting_payment', 'placed', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled',
