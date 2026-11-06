@@ -101,6 +101,13 @@ describe('staff', () => {
     assert.equal(done.body.order.payment.status, 'collected');
     assert.equal(done.body.order.history.at(-1).role, 'delivery');
     assert.equal((await move(owner, orderId, { status: 'cancelled' })).status, 409, 'final');
+
+    // The customer sees every step the staff took.
+    const mine = (await call('GET', '/v1/orders', { token: customer })).body.orders.find((o) => o.id === orderId);
+    assert.deepEqual(mine.history.map((h) => h.status), ['placed', 'confirmed', 'packed', 'shipped', 'delivered']);
+    const inbox = await call('GET', '/v1/notifications', { token: customer });
+    const types = JSON.stringify(inbox.body);
+    for (const step of ['confirmed', 'packed', 'shipped', 'delivered']) assert.ok(types.includes(`order.${step}`), `no ${step} notification`);
   });
 
   it('the desk assigns a team and the owner sees the numbers', async () => {

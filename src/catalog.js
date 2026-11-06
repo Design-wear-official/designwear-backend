@@ -96,7 +96,7 @@ export class CmsCatalog {
     const headers = { authorization: `Bearer ${writeToken}`, 'content-type': 'application/json' };
     const res = row?.id
       ? await this.fetchImpl(`${base}/${encodeURIComponent(row.id)}`, { method: 'PATCH', headers, redirect: 'error', body: JSON.stringify({ quantity }) })
-      : await this.fetchImpl(base, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ teamId, productId, quantity }) });
+      : await this.fetchImpl(base, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ id: `${teamId}_${productId}`, teamId, productId, quantity }) });
     if (!res.ok) throw new Error(`stock_write_failed:${res.status}`);
     this.caches.delete('team_stock'); // the next read sees the change
   }
