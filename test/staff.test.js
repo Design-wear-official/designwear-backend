@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { CmsCatalog } from '../src/catalog.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store.js';
+import { asGateway } from './gateway_fake.js';
 
 const collections = {
   products: [{ id: 'p1', title: 'Graphic Tee', price: 500, stockCount: 99 }],
@@ -36,12 +37,16 @@ const gatewayMe = async (url, init) => {
     : { ok: false, status: 401, json: async () => ({}) };
 };
 
+// A stand-in for the SethuCMS order mirror that reports how many orders it holds.
+let mirrored = 0;
+const cmsMirror = { enabled: true, push: async () => { mirrored++; }, pull: async () => null, count: async () => ({ count: mirrored, exact: true }) };
+
 let server, call;
 before(async () => {
   const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40), DESIGNWEAR_ADMIN_TOKEN: ADMIN, SETHUCMS_SIGNIN_URL: 'https://gw.test/w/ws/' });
   config.rateLimitMultiplier = 1000;
-  const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, gateway, 0);
-  const app = createApp({ config, store: await new Store(':memory:').load(), catalog, ai: {}, mailer: { send: async () => {} }, fetchImpl: gatewayMe });
+  const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, asGateway(gateway), 0);
+  const app = createApp({ config, store: await new Store(':memory:').load(), catalog, ai: {}, mailer: { send: async () => {} }, fetchImpl: gatewayMe, orderSync: cmsMirror });
   server = createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -128,6 +133,8 @@ describe('staff', () => {
     assert.equal(s.byStatus.delivered, 1);
     assert.equal(s.byStatus.placed, 1);
     assert.ok(s.sales > 0 && s.cashToCollect > 0);
+    assert.equal(s.cms.orders, mirrored, 'SethuCMS count comes from the SDK count call');
+    assert.equal(typeof s.cms.inSync, 'boolean');
     assert.equal((await call('GET', '/v1/staff/summary', { token: courier })).status, 403);
     assert.equal((await move(owner, otherId, { status: 'cancelled', note: 'customer called' })).body.order.status, 'cancelled');
   });

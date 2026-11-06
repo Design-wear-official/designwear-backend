@@ -1,9 +1,12 @@
 # DesignWear API
 
 Accounts, carts, orders, community designs, search and AI for the DesignWear app.
-Plain Node (20+), no dependencies.
+Plain Node (20+). The one dependency is the official [`@sethucms/sdk`](https://www.npmjs.com/package/@sethucms/sdk)
+(pinned, 0.2.0): every call to the SethuCMS gateway (catalog, orders mirror, team stock, database store) goes through
+`src/sethu.js`. Run `npm ci` first.
 
 ```sh
+npm ci
 cp .env.example .env     # private settings, git-ignored; the server loads it itself
 npm start                # http://127.0.0.1:8787  (node --env-file-if-exists=.env src/index.js)
 node --test              # 29 tests

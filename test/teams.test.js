@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { CmsCatalog } from '../src/catalog.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store.js';
+import { asGateway } from './gateway_fake.js';
 
 const collections = {
   products: [{ id: 'p1', title: 'Graphic Tee', price: 500, stockCount: 99 }],
@@ -35,7 +36,7 @@ let servers = [];
 async function start(gatewayFetch) {
   const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40) });
   config.rateLimitMultiplier = 1000;
-  const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, gatewayFetch, 0);
+  const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, asGateway(gatewayFetch), 0);
   const app = createApp({ config, store: await new Store(':memory:').load(), catalog, ai: {}, mailer: { send: async () => {} } });
   const server = createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));

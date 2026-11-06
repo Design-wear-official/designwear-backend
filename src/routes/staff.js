@@ -175,6 +175,9 @@ export function registerStaffRoutes(router, ctx) {
       const since = Date.parse(o.history?.at(-1)?.at ?? o.createdAt);
       if (limit && nowMs - since > limit * HOUR) stuck.push({ id: o.id, status: o.status, hours: Math.floor((nowMs - since) / HOUR) });
     }
-    return { status: 200, body: { byStatus, byTeam, sales: v.round2(sales), cashToCollect: v.round2(cashToCollect), stuck } };
+    // What SethuCMS holds, so the owner can spot orders that never reached the mirror.
+    const cmsCount = await ctx.cmsOrderCount();
+    const cms = cmsCount && { orders: cmsCount.count, exact: cmsCount.exact, inSync: cmsCount.exact && cmsCount.count === orders.length };
+    return { status: 200, body: { byStatus, byTeam, sales: v.round2(sales), cashToCollect: v.round2(cashToCollect), stuck, cms: cms ?? null } };
   });
 }

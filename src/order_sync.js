@@ -7,7 +7,7 @@
 // subtotal, tax, total, paymentMethod, paymentStatus, teamId, teamName,
 // trackingId, carrier, printFiles.
 
-const TIMEOUT_MS = 6000;
+import { hasStatus, sethuClient, statusOf } from './sethu.js';
 
 export const ORDER_STATUSES = [
   'awaiting_payment', 'placed', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled',
@@ -58,6 +58,9 @@ export class NullOrderSync {
   async pull() {
     return null;
   }
+  async count() {
+    return null;
+  }
 }
 
 export class CmsOrderSync {
@@ -65,28 +68,15 @@ export class CmsOrderSync {
     Object.assign(this, { url, connectionId, token, collection, fetchImpl });
   }
 
+  // Built on first use: with no address or token (sync off) there is nothing to give the SDK.
+  get orders() {
+    this._orders ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl })
+      .collection(this.connectionId, this.collection);
+    return this._orders;
+  }
+
   get enabled() {
     return Boolean(this.url && this.connectionId && this.token);
-  }
-
-  #base() {
-    const connection = encodeURIComponent(this.connectionId);
-    const collection = encodeURIComponent(this.collection);
-    return `${this.url}/v1/connections/${connection}/collections/${collection}/records`;
-  }
-
-  #call(method, path, body, idempotencyKey) {
-    return this.fetchImpl(`${this.#base()}${path}`, {
-      method,
-      redirect: 'error',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: {
-        authorization: `Bearer ${this.token}`,
-        ...(body && { 'content-type': 'application/json' }),
-        ...(idempotencyKey && { 'idempotency-key': idempotencyKey }),
-      },
-      body: body && JSON.stringify(body),
-    });
   }
 
   // Creates the record, or updates it when it already exists. Safe to repeat:
@@ -97,20 +87,28 @@ export class CmsOrderSync {
     const version = order.history?.length ?? 0;
 
     const { id, ...changes } = record;
-    const update = await this.#call('PATCH', `/${encodeURIComponent(id)}`, changes, `upd:${id}:${version}`);
-    if (update.ok) return;
-    if (update.status !== 404) throw new Error(`order_sync_failed:${update.status}`);
-
-    const create = await this.#call('POST', '', record, `new:${id}`);
-    if (!create.ok) throw new Error(`order_sync_failed:${create.status}`);
+    try {
+      await this.orders.update(id, changes, { idempotencyKey: `upd:${id}:${version}` });
+      return;
+    } catch (error) {
+      if (!hasStatus(error, 404)) throw new Error(`order_sync_failed:${statusOf(error)}`);
+    }
+    try {
+      await this.orders.create(record, { idempotencyKey: `new:${id}` });
+    } catch (error) {
+      throw new Error(`order_sync_failed:${statusOf(error)}`);
+    }
   }
 
   // What the business has set on this order in SethuCMS, or null.
   async pull(order) {
     if (!this.enabled || FINAL.includes(order.status)) return null;
-    const response = await this.#call('GET', `/${encodeURIComponent(order.id)}`);
-    if (!response.ok) return null;
-    const record = (await response.json()).data ?? {};
+    let record;
+    try {
+      record = await this.orders.get(order.id);
+    } catch {
+      return null;
+    }
     if (!ORDER_STATUSES.includes(record.status) || record.status === 'awaiting_payment') return null;
     return {
       status: record.status,
@@ -118,5 +116,15 @@ export class CmsOrderSync {
         ? { id: String(record.trackingId), carrier: String(record.carrier ?? '') }
         : null,
     };
+  }
+
+  /** How many orders SethuCMS holds ({ count, exact }), or null when it cannot say. */
+  async count() {
+    if (!this.enabled) return null;
+    try {
+      return await this.orders.count();
+    } catch {
+      return null;
+    }
   }
 }

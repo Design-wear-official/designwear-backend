@@ -1,4 +1,6 @@
 /** Reads products from the SethuCMS gateway so the server prices orders itself. */
+import { hasStatus, sethuClient, statusOf } from './sethu.js';
+
 function num(v) {
   return typeof v === 'number' ? v : Number.parseFloat(v);
 }
@@ -47,6 +49,12 @@ export class CmsCatalog {
     this.inflight = new Map();
   }
 
+  // Built on first use: an unconfigured catalog has no address to give the SDK.
+  get client() {
+    this._client ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl });
+    return this._client;
+  }
+
   get configured() {
     return Boolean(this.url && this.connectionId && this.token);
   }
@@ -92,12 +100,14 @@ export class CmsCatalog {
     if (!writeToken) throw new Error('stock_writes_disabled');
     const rows = await this.#collection('team_stock', { optional: true });
     const row = rows.find((r) => String(r.teamId) === teamId && String(r.productId) === productId);
-    const base = `${this.url}/v1/connections/${encodeURIComponent(this.connectionId)}/collections/team_stock/records`;
-    const headers = { authorization: `Bearer ${writeToken}`, 'content-type': 'application/json' };
-    const res = row?.id
-      ? await this.fetchImpl(`${base}/${encodeURIComponent(row.id)}`, { method: 'PATCH', headers, redirect: 'error', body: JSON.stringify({ quantity }) })
-      : await this.fetchImpl(base, { method: 'POST', headers, redirect: 'error', body: JSON.stringify({ id: `${teamId}_${productId}`, teamId, productId, quantity }) });
-    if (!res.ok) throw new Error(`stock_write_failed:${res.status}`);
+    const stock = sethuClient({ url: this.url, token: writeToken, fetchImpl: this.fetchImpl })
+      .collection(this.connectionId, 'team_stock');
+    try {
+      if (row?.id) await stock.update(row.id, { quantity });
+      else await stock.create({ id: `${teamId}_${productId}`, teamId, productId, quantity });
+    } catch (error) {
+      throw new Error(`stock_write_failed:${statusOf(error)}`);
+    }
     this.caches.delete('team_stock'); // the next read sees the change
   }
 
@@ -116,23 +126,13 @@ export class CmsCatalog {
 
   async #refresh(name, optional) {
     const items = [];
-    let cursor = null;
-    for (let page = 0; page < 20; page++) {
-      const q = new URLSearchParams({ limit: '500' });
-      if (cursor) q.set('cursor', cursor);
-      const connection = encodeURIComponent(this.connectionId);
-      const res = await this.fetchImpl(
-        `${this.url}/v1/connections/${connection}/collections/${encodeURIComponent(name)}/records?${q}`,
-        { headers: { authorization: `Bearer ${this.token}` }, redirect: 'error' },
-      );
+    try {
+      const records = this.client.collection(this.connectionId, name).query().limit(500);
+      for await (const record of records.iterate({ maxPages: 20 })) items.push(record);
+    } catch (error) {
       // A collection that is not set up yet simply has no records.
-      if (optional && (res.status === 404 || res.status === 403)) break;
-      if (!res.ok) throw new Error(`catalog_unavailable:${res.status}`);
-      const body = await res.json();
-      items.push(...body.data);
-      // The gateway answers { data, page: { nextCursor } }.
-      cursor = body.page?.nextCursor ?? body.nextCursor ?? null;
-      if (!cursor) break;
+      if (!(optional && hasStatus(error, 404, 403))) throw new Error(`catalog_unavailable:${statusOf(error)}`);
+      items.length = 0;
     }
     this.caches.set(name, { at: Date.now(), items });
     return items;

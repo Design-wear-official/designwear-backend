@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { CmsCatalog } from '../src/catalog.js';
 import { loadConfig } from '../src/config.js';
 import { SethuStore, createStore } from '../src/store.js';
+import { asGateway } from './gateway_fake.js';
 
 // A stand-in for the SethuCMS gateway holding one collection of records.
 function fakeGateway({ pageSize = 500 } = {}) {
@@ -48,7 +49,7 @@ const settings = { url: 'https://cms.test', connectionId: 'c1', token: 'store-to
 describe('SethuStore', () => {
   it('stores, lists (by collection, across pages) and deletes records', async () => {
     const { fetchImpl, records, seen } = fakeGateway({ pageSize: 2 });
-    const store = new SethuStore(settings, fetchImpl);
+    const store = new SethuStore(settings, asGateway(fetchImpl));
 
     for (let n = 1; n <= 5; n += 1) await store.put('users', `u_${n}`, { id: `u_${n}`, n });
     await store.put('emails', 'ada@example.com', { id: 'ada@example.com', userId: 'u_1' });
@@ -72,7 +73,7 @@ describe('SethuStore', () => {
   });
 
   it('reports a failing gateway instead of pretending the write worked', async () => {
-    const store = new SethuStore(settings, async () => ({ ok: false, status: 503, json: async () => ({}) }));
+    const store = new SethuStore(settings, asGateway(async () => ({ ok: false, status: 503, json: async () => ({}) })));
     await assert.rejects(() => store.put('users', 'a', {}), /sethucms_store_error:503/);
     await assert.rejects(() => store.list('users'), /sethucms_store_error:503/);
   });
@@ -90,7 +91,7 @@ describe('SethuStore', () => {
     const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40) });
     config.rateLimitMultiplier = 1000;
     const catalog = { configured: true, products: async () => [], product: async () => null };
-    const build = () => createApp({ config, store: new SethuStore(settings, fetchImpl), catalog, ai: {}, mailer: { send: async () => {} } });
+    const build = () => createApp({ config, store: new SethuStore(settings, asGateway(fetchImpl)), catalog, ai: {}, mailer: { send: async () => {} } });
 
     const request = async (app, method, path, body, token) => {
       const server = createServer(app);
@@ -124,7 +125,7 @@ describe('catalog paging', () => {
       const next = start + 2 < all.length ? String(start + 2) : null;
       return { ok: true, status: 200, json: async () => ({ data: all.slice(start, start + 2), page: { nextCursor: next, limit: 2 } }) };
     };
-    const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, fetchImpl, 0);
+    const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, asGateway(fetchImpl), 0);
     assert.equal((await catalog.products()).length, 5);
   });
 });

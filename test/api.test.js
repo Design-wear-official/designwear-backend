@@ -8,6 +8,7 @@ import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store.js';
 import { signToken, verifyToken } from '../src/security.js';
+import { asGateway } from './gateway_fake.js';
 
 const products = [
   { id: 'p1', title: 'Graphic Tee', description: 'cotton tee', price: 500, imageUrl: 'https://img.test/a.png', stock: 5, tags: ['summer'], productType: 'T-Shirt' },
@@ -312,7 +313,7 @@ describe('search, ai, config and hygiene', () => {
 describe('catalog filtering', () => {
   it('drops remixes and unpriced entries so they can be neither listed nor ordered', async () => {
     const { CmsCatalog } = await import('../src/catalog.js');
-    const cat = new CmsCatalog({ url: 'https://c.test', connectionId: 'c', token: 't' }, async () => ({
+    const cat = new CmsCatalog({ url: 'https://c.test', connectionId: 'c', token: 't' }, asGateway(async () => ({
       ok: true,
       json: async () => ({
         data: [
@@ -324,7 +325,7 @@ describe('catalog filtering', () => {
         ],
         nextCursor: null,
       }),
-    }));
+    })));
     assert.deepEqual((await cat.products()).map((p) => p.id), ['ok', 'credit']);
     assert.equal(await cat.product('r1'), null);
   });
@@ -382,11 +383,11 @@ describe('performance guards', () => {
   it('coalesces store writes and shares one catalog refresh', async () => {
     const { CmsCatalog } = await import('../src/catalog.js');
     let fetches = 0;
-    const cat = new CmsCatalog({ url: 'https://c.test', connectionId: 'c', token: 't' }, async () => {
+    const cat = new CmsCatalog({ url: 'https://c.test', connectionId: 'c', token: 't' }, asGateway(async () => {
       fetches++;
       await new Promise((r) => setTimeout(r, 20));
       return { ok: true, json: async () => ({ data: [{ id: 'a', title: 'A', price: 1 }], nextCursor: null }) };
-    });
+    }));
     await Promise.all([cat.products(), cat.products(), cat.products(), cat.product('a')]);
     assert.equal(fetches, 1);
 
