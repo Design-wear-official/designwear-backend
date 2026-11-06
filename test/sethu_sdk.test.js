@@ -54,6 +54,14 @@ describe('catalog over real HTTP', () => {
     await assert.rejects(new CmsCatalog({ url, ...cfg }, fetch, 0).products(), /catalog_unavailable:500/);
   });
 
+  it('waits for a slow gateway (default 30 s), and says TIMEOUT when its own limit is short', async () => {
+    const slow = (req, res) => setTimeout(() => json(res, 200, { data: [{ id: 'a', price: 1 }], page: { nextCursor: null } }), 400);
+    setup(slow);
+    assert.equal((await new CmsCatalog({ url, ...cfg }, fetch, 0).products()).length, 1, 'a 0.4 s answer is fine');
+    setup(slow);
+    await assert.rejects(new CmsCatalog({ url, ...cfg, timeoutMs: 100 }, fetch, 0).products(), /catalog_unavailable:TIMEOUT/);
+  });
+
   it('says why when nobody answers, not just ":0"', async () => {
     const gone = new CmsCatalog({ url: 'http://127.0.0.1:1', ...cfg }, fetch, 0);
     await assert.rejects(gone.products(), /catalog_unavailable:CONNECTION_FAILED/);

@@ -46,16 +46,21 @@ export function normaliseTeam(r) {
 const MAX_PAGES = 20;
 
 export class CmsCatalog {
-  constructor({ url, connectionId, token, allowHttp = false }, fetchImpl = fetch, ttlMs = 300_000) {
-    Object.assign(this, { url, connectionId, token, allowHttp, fetchImpl, ttlMs });
+  constructor({ url, connectionId, token, allowHttp = false, timeoutMs = 30_000 }, fetchImpl = fetch, ttlMs = 300_000) {
+    Object.assign(this, { url, connectionId, token, allowHttp, timeoutMs, fetchImpl, ttlMs });
     this.caches = new Map(); // collection -> { at, items }
     this.inflight = new Map();
   }
 
   // Built on first use: an unconfigured catalog has no address to give the SDK.
   get client() {
-    // Reads here refill a cache and nobody waits on one, so retrying is cheap.
-    this._client ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl, allowHttp: this.allowHttp });
+    // Listing the catalog can take well over 10 s on a cold gateway (the code before the SDK had no
+    // timeout at all, and the live gateway needs this long), so each attempt gets 30 s and a read is
+    // retried once: 2 x 30 s still fits the function's 60 s limit. The result is cached for 5 minutes.
+    this._client ??= sethuClient({
+      url: this.url, token: this.token, fetchImpl: this.fetchImpl, allowHttp: this.allowHttp,
+      timeoutMs: this.timeoutMs, maxRetries: 1,
+    });
     return this._client;
   }
 
