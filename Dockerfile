@@ -3,8 +3,9 @@ ENV NODE_ENV=production
 WORKDIR /app
 # su-exec: lets the entrypoint fix the data folder's owner, then run as a normal user.
 RUN apk add --no-cache su-exec
-# No dependencies to install: the server uses only Node's standard library.
-COPY package.json ./
+# One dependency, the official SethuCMS SDK (pinned in package-lock.json).
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 COPY src ./src
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data && chown node:node /data

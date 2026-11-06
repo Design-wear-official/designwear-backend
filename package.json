@@ -3,11 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "DesignWear API: auth, carts, orders, community designs, search and AI. No dependencies.",
+  "description": "DesignWear API: auth, carts, orders, community designs, search and AI. One dependency: @sethucms/sdk.",
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "test": "node --test",
     "openapi": "node scripts/openapi.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@sethucms/sdk": "0.2.0"
+  }
 }

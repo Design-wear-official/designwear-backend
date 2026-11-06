@@ -1,8 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 
 import { createAccessTokenSource } from './google_auth.js';
+import { eq, hasStatus, sethuClient, statusOf } from './sethu.js';
 
 /**
  * Small document store: collections of JSON documents keyed by id.
@@ -220,77 +220,63 @@ export class SethuStore {
     return this;
   }
 
-  #base() {
-    const connection = encodeURIComponent(this.connectionId);
-    const collection = encodeURIComponent(this.collection);
-    return `${this.url}/v1/connections/${connection}/collections/${collection}/records`;
+  // Built on first use, so a store that is never reached needs no gateway address.
+  get records() {
+    this._records ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl })
+      .collection(this.connectionId, this.collection);
+    return this._records;
   }
 
   #key(coll, id) {
     return `${coll}:${Buffer.from(String(id)).toString('base64url')}`;
   }
 
-  async #call(method, path, body) {
-    const response = await this.fetchImpl(`${this.#base()}${path}`, {
-      method,
-      redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        authorization: `Bearer ${this.token}`,
-        ...(body && { 'content-type': 'application/json' }),
-        ...(method !== 'GET' && { 'idempotency-key': randomUUID() }),
-      },
-      body: body && JSON.stringify(body),
-    });
-    return response;
-  }
-
   async get(coll, id) {
-    const response = await this.#call('GET', `/${encodeURIComponent(this.#key(coll, id))}`);
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`sethucms_store_error:${response.status}`);
-    const record = (await response.json()).data;
-    return record?.data ? JSON.parse(record.data) : null;
+    try {
+      const record = await this.records.get(this.#key(coll, id));
+      return record?.data ? JSON.parse(record.data) : null;
+    } catch (error) {
+      if (hasStatus(error, 404)) return null;
+      throw new Error(`sethucms_store_error:${statusOf(error)}`);
+    }
   }
 
   // Reads every record of the collection, page by page, then filters.
   async list(coll, predicate = () => true) {
     const results = [];
-    let cursor = null;
-    do {
-      const query = new URLSearchParams({
-        limit: '500',
-        filter: JSON.stringify({ field: 'coll', op: 'eq', value: coll }),
-      });
-      if (cursor) query.set('cursor', cursor);
-      const response = await this.#call('GET', `?${query}`);
-      if (!response.ok) throw new Error(`sethucms_store_error:${response.status}`);
-      const body = await response.json();
-      for (const record of body.data ?? []) {
+    try {
+      for await (const record of this.records.where(eq('coll', coll)).limit(500).iterate({ maxPages: 1000 })) {
         const doc = JSON.parse(record.data);
         if (predicate(doc)) results.push(doc);
       }
-      cursor = body.page?.nextCursor ?? null;
-    } while (cursor);
+    } catch (error) {
+      throw new Error(`sethucms_store_error:${statusOf(error)}`);
+    }
     return results;
   }
 
   async put(coll, id, doc) {
     const key = this.#key(coll, id);
     const data = JSON.stringify(doc);
-    const update = await this.#call('PATCH', `/${encodeURIComponent(key)}`, { data });
-    if (update.ok) return doc;
-    if (update.status !== 404) throw new Error(`sethucms_store_error:${update.status}`);
-
-    const create = await this.#call('POST', '', { id: key, coll, data });
-    if (!create.ok) throw new Error(`sethucms_store_error:${create.status}`);
+    try {
+      await this.records.update(key, { data });
+      return doc;
+    } catch (error) {
+      if (!hasStatus(error, 404)) throw new Error(`sethucms_store_error:${statusOf(error)}`);
+    }
+    try {
+      await this.records.create({ id: key, coll, data });
+    } catch (error) {
+      throw new Error(`sethucms_store_error:${statusOf(error)}`);
+    }
     return doc;
   }
 
   async del(coll, id) {
-    const response = await this.#call('DELETE', `/${encodeURIComponent(this.#key(coll, id))}`);
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`sethucms_store_error:${response.status}`);
+    try {
+      await this.records.delete(this.#key(coll, id));
+    } catch (error) {
+      if (!hasStatus(error, 404)) throw new Error(`sethucms_store_error:${statusOf(error)}`);
     }
   }
 }

@@ -623,7 +623,7 @@
         "tags": [
           "staff"
         ],
-        "summary": "Desk or owner: counts by status and team, sales, cash to collect, stuck orders",
+        "summary": "Desk or owner: counts by status and team, sales, cash to collect, stuck orders, and how many orders SethuCMS holds (cms, null when the mirror is off)",
         "responses": {
           "200": {
             "description": "OK"

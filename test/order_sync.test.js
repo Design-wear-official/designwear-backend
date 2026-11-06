@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { CmsOrderSync } from '../src/order_sync.js';
 import { Store } from '../src/store.js';
+import { asGateway } from './gateway_fake.js';
 
 const address = { label: 'Home', name: 'Ada', phone: '9999999999', line1: '1 Road', city: 'Pune', state: 'MH', pin: '411001' };
 const products = [{ id: 'p1', title: 'Graphic Tee', price: 500, imageUrl: null, stock: 9, tags: [], productType: 'T-Shirt', description: '' }];
@@ -39,7 +40,7 @@ const mails = [];
 async function start(cmsFake) {
   const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40) });
   config.rateLimitMultiplier = 1000;
-  const orderSync = new CmsOrderSync({ url: 'https://cms.test', connectionId: 'c1', token: 'write-token' }, cmsFake.fetchImpl);
+  const orderSync = new CmsOrderSync({ url: 'https://cms.test', connectionId: 'c1', token: 'write-token' }, asGateway(cmsFake.fetchImpl));
   const app = createApp({
     config, orderSync,
     store: await new Store(':memory:').load(),

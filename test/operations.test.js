@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { CmsCatalog } from '../src/catalog.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store.js';
+import { asGateway } from './gateway_fake.js';
 
 const collections = {
   products: [{ id: 'p1', title: 'Graphic Tee', price: 500, stockCount: 99 }],
@@ -39,7 +40,7 @@ before(async () => {
     refunds.push({ url, body: JSON.parse(init.body) });
     return { ok: true, json: async () => ({ id: 'rfnd_1' }) };
   };
-  const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, gateway, 0);
+  const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, asGateway(gateway), 0);
   const app = createApp({ config, store: await new Store(':memory:').load(), catalog, ai: {}, mailer: { send: async () => {} } });
   server = createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));

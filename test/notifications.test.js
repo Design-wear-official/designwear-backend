@@ -8,6 +8,7 @@ import { loadConfig } from '../src/config.js';
 import { CmsOrderSync } from '../src/order_sync.js';
 import { FcmPush } from '../src/push.js';
 import { Store } from '../src/store.js';
+import { asGateway } from './gateway_fake.js';
 
 const SECRET = 'whsec_test_secret';
 const address = { label: 'Home', name: 'Ada', phone: '9999999999', line1: '1 Road', city: 'Pune', state: 'MH', pin: '411001' };
@@ -56,7 +57,7 @@ before(async () => {
     catalog: { configured: true, products: async () => products, product: async (id) => products.find((p) => p.id === id) ?? null },
     ai: {},
     mailer: { send: async (to, subject, text, options = {}) => mails.push({ to, subject, text, html: options.html }) },
-    orderSync: new CmsOrderSync({ url: 'https://cms.test', connectionId: 'c1', token: 't' }, cmsFetch),
+    orderSync: new CmsOrderSync({ url: 'https://cms.test', connectionId: 'c1', token: 't' }, asGateway(cmsFetch)),
     push: new FcmPush({ credentials: { project_id: 'demo', client_email: 'svc@demo.iam.gserviceaccount.com', private_key: privateKey } }, googleFetch),
   });
   server = createServer(app);

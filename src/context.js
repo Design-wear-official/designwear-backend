@@ -199,6 +199,9 @@ export function createContext(deps) {
     }
   }
 
+  // How many orders SethuCMS holds ({ count, exact }), or null when the mirror is off or cannot say.
+  const cmsOrderCount = async () => (orderSync.enabled ? ((await orderSync.count?.()) ?? null) : null);
+
   const notifier = createNotifier({ store, mailer, push, logger, now });
 
   // Tells the order's owner about a step: inbox, email and phone.
@@ -290,7 +293,7 @@ export function createContext(deps) {
   return {
     config, store, catalog, ai, mailer, logger, clientLogger, now, fetchImpl, firebase,
     ipOf, limit, authed, staffUser, optionalUser, issue, readBody, requireAdmin,
-    syncOrder, refreshOrder, notifier, notifyOrder, resendReceipt, audit, quota, readRaw,
+    syncOrder, refreshOrder, cmsOrderCount, notifier, notifyOrder, resendReceipt, audit, quota, readRaw,
     findUserByEmail, findUserByFirebaseUid, indexUser,
   };
 }
