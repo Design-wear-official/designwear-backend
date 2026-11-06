@@ -155,7 +155,8 @@ export function registerStaffRoutes(router, ctx) {
   // Desk or owner: the numbers on one screen.
   router.route('GET', '/v1/staff/summary', async ({ req }) => {
     await ctx.staffUser(req, ['desk', 'owner']);
-    const orders = await store.list('orders');
+    // The SethuCMS count runs beside the local scan, so it adds no time of its own.
+    const [orders, cmsCount] = await Promise.all([store.list('orders'), ctx.cmsOrderCount()]);
     const nowMs = now();
     const byStatus = Object.fromEntries(STATUSES.map((s) => [s, 0]));
     const byTeam = {};
@@ -175,9 +176,9 @@ export function registerStaffRoutes(router, ctx) {
       const since = Date.parse(o.history?.at(-1)?.at ?? o.createdAt);
       if (limit && nowMs - since > limit * HOUR) stuck.push({ id: o.id, status: o.status, hours: Math.floor((nowMs - since) / HOUR) });
     }
-    // What SethuCMS holds, so the owner can spot orders that never reached the mirror.
-    const cmsCount = await ctx.cmsOrderCount();
-    const cms = cmsCount && { orders: cmsCount.count, exact: cmsCount.exact, inSync: cmsCount.exact && cmsCount.count === orders.length };
+    // What SethuCMS holds, so the owner can spot orders that never reached the mirror. When the count was
+    // cut off at its limit it cannot be compared, so inSync is null rather than a false alarm.
+    const cms = cmsCount && { orders: cmsCount.count, exact: cmsCount.exact, inSync: cmsCount.exact ? cmsCount.count === orders.length : null };
     return { status: 200, body: { byStatus, byTeam, sales: v.round2(sales), cashToCollect: v.round2(cashToCollect), stuck, cms: cms ?? null } };
   });
 }

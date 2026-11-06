@@ -39,7 +39,8 @@ const gatewayMe = async (url, init) => {
 
 // A stand-in for the SethuCMS order mirror that reports how many orders it holds.
 let mirrored = 0;
-const cmsMirror = { enabled: true, push: async () => { mirrored++; }, pull: async () => null, count: async () => ({ count: mirrored, exact: true }) };
+let mirrorExact = true;
+const cmsMirror = { enabled: true, push: async () => { mirrored++; }, pull: async () => null, count: async () => ({ count: mirrored, exact: mirrorExact }) };
 
 let server, call;
 before(async () => {
@@ -135,6 +136,9 @@ describe('staff', () => {
     assert.ok(s.sales > 0 && s.cashToCollect > 0);
     assert.equal(s.cms.orders, mirrored, 'SethuCMS count comes from the SDK count call');
     assert.equal(typeof s.cms.inSync, 'boolean');
+    mirrorExact = false; // the count was cut off at its limit, so it cannot be compared
+    assert.equal((await call('GET', '/v1/staff/summary', { token: owner })).body.cms.inSync, null);
+    mirrorExact = true;
     assert.equal((await call('GET', '/v1/staff/summary', { token: courier })).status, 403);
     assert.equal((await move(owner, otherId, { status: 'cancelled', note: 'customer called' })).body.order.status, 'cancelled');
   });

@@ -14,6 +14,9 @@ function parseServiceAccount(raw) {
 
 export function loadConfig(env = process.env) {
   const production = env.NODE_ENV === 'production';
+  // The SethuCMS SDK refuses plain http except to localhost. Set SETHUCMS_ALLOW_HTTP=1 for a gateway on a
+  // private network (for example http://cms:3000 in docker-compose).
+  const allowHttp = env.SETHUCMS_ALLOW_HTTP === '1';
   const config = {
     production,
     port: Number(env.PORT ?? 8787),
@@ -38,6 +41,7 @@ export function loadConfig(env = process.env) {
       url: (env.SETHUCMS_URL ?? '').replace(/\/+$/, ''),
       connectionId: env.SETHUCMS_CONNECTION_ID ?? '',
       token: env.SETHUCMS_TOKEN ?? '',
+      allowHttp,
     },
     // SethuCMS as the shop's own database (users, carts, orders, designs...).
     // Its token needs read-write access to one collection only.
@@ -46,6 +50,7 @@ export function loadConfig(env = process.env) {
       connectionId: env.SETHUCMS_STORE_CONNECTION_ID ?? env.SETHUCMS_CONNECTION_ID ?? '',
       token: env.SETHUCMS_STORE_TOKEN ?? '',
       collection: env.SETHUCMS_STORE_COLLECTION ?? 'dw_store',
+      allowHttp,
     },
     // Phone notifications (Firebase Cloud Messaging). A service-account key for the
     // Firebase project, as JSON text or base64. Separate from FIREBASE_SERVICE_ACCOUNT,
@@ -60,6 +65,7 @@ export function loadConfig(env = process.env) {
       connectionId: env.SETHUCMS_ORDERS_CONNECTION_ID ?? env.SETHUCMS_CONNECTION_ID ?? '',
       token: env.SETHUCMS_ORDERS_TOKEN ?? '',
       collection: env.SETHUCMS_ORDERS_COLLECTION ?? 'orders',
+      allowHttp,
     },
     razorpay: { keyId: env.RAZORPAY_KEY_ID ?? '', keySecret: env.RAZORPAY_KEY_SECRET ?? '' },
     gemini: {

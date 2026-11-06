@@ -1,5 +1,5 @@
 /** Reads products from the SethuCMS gateway so the server prices orders itself. */
-import { hasStatus, sethuClient, statusOf } from './sethu.js';
+import { failureOf, hasStatus, sethuClient } from './sethu.js';
 
 function num(v) {
   return typeof v === 'number' ? v : Number.parseFloat(v);
@@ -42,16 +42,20 @@ export function normaliseTeam(r) {
   };
 }
 
+// Records read per collection: 500 a page, this many pages (10,000 records).
+const MAX_PAGES = 20;
+
 export class CmsCatalog {
-  constructor({ url, connectionId, token }, fetchImpl = fetch, ttlMs = 300_000) {
-    Object.assign(this, { url, connectionId, token, fetchImpl, ttlMs });
+  constructor({ url, connectionId, token, allowHttp = false }, fetchImpl = fetch, ttlMs = 300_000) {
+    Object.assign(this, { url, connectionId, token, allowHttp, fetchImpl, ttlMs });
     this.caches = new Map(); // collection -> { at, items }
     this.inflight = new Map();
   }
 
   // Built on first use: an unconfigured catalog has no address to give the SDK.
   get client() {
-    this._client ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl });
+    // Reads here refill a cache and nobody waits on one, so retrying is cheap.
+    this._client ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl, allowHttp: this.allowHttp });
     return this._client;
   }
 
@@ -100,13 +104,13 @@ export class CmsCatalog {
     if (!writeToken) throw new Error('stock_writes_disabled');
     const rows = await this.#collection('team_stock', { optional: true });
     const row = rows.find((r) => String(r.teamId) === teamId && String(r.productId) === productId);
-    const stock = sethuClient({ url: this.url, token: writeToken, fetchImpl: this.fetchImpl })
+    const stock = sethuClient({ url: this.url, token: writeToken, fetchImpl: this.fetchImpl, allowHttp: this.allowHttp })
       .collection(this.connectionId, 'team_stock');
     try {
       if (row?.id) await stock.update(row.id, { quantity });
       else await stock.create({ id: `${teamId}_${productId}`, teamId, productId, quantity });
     } catch (error) {
-      throw new Error(`stock_write_failed:${statusOf(error)}`);
+      throw new Error(`stock_write_failed:${failureOf(error)}`);
     }
     this.caches.delete('team_stock'); // the next read sees the change
   }
@@ -128,11 +132,16 @@ export class CmsCatalog {
     const items = [];
     try {
       const records = this.client.collection(this.connectionId, name).query().limit(500);
-      for await (const record of records.iterate({ maxPages: 20 })) items.push(record);
+      for await (const record of records.iterate({ maxPages: MAX_PAGES })) items.push(record);
     } catch (error) {
-      // A collection that is not set up yet simply has no records.
-      if (!(optional && hasStatus(error, 404, 403))) throw new Error(`catalog_unavailable:${statusOf(error)}`);
-      items.length = 0;
+      if (error instanceof RangeError && /pages/.test(error.message)) {
+        // Over MAX_PAGES x 500 records: use what was read rather than losing the whole catalog.
+      } else if (optional && hasStatus(error, 404, 403)) {
+        // A collection that is not set up yet simply has no records.
+        items.length = 0;
+      } else {
+        throw new Error(`catalog_unavailable:${failureOf(error)}`);
+      }
     }
     this.caches.set(name, { at: Date.now(), items });
     return items;
