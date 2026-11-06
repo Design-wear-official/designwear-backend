@@ -96,6 +96,46 @@
         }
       }
     },
+    "/v1/auth/sethucms": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Staff: trade a SethuCMS gateway session token for a DesignWear session (only if its verified e-mail is a staff account)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "SethuCMS did not accept the token"
+          },
+          "403": {
+            "description": "Not a staff account"
+          },
+          "404": {
+            "description": "SETHUCMS_SIGNIN_URL not set"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/auth/password-reset/request": {
       "post": {
         "tags": [
@@ -349,7 +389,7 @@
         "tags": [
           "admin"
         ],
-        "summary": "Make an account staff, or remove it with role null",
+        "summary": "Make an account staff (creating it if they have not signed up yet), or remove it with role null",
         "responses": {
           "200": {
             "description": "OK"

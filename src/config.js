@@ -104,6 +104,9 @@ export function loadConfig(env = process.env) {
     // CDN's own CORS list). Comma-separated hosts; only /images/<project>/... paths.
     imageHosts: list(env.IMAGE_HOSTS ?? 'cdn.sanity.io'),
     adminToken: env.DESIGNWEAR_ADMIN_TOKEN ?? '',
+    // Where staff sign in with SethuCMS: the gateway that issues their session (it may include
+    // a /w/<workspace> prefix). Unset = the SethuCMS sign-in route does not exist.
+    staffSigninUrl: (env.SETHUCMS_SIGNIN_URL ?? '').replace(/\/+$/, ''),
     // Returns: days after delivery a customer may ask for one.
     returnWindowDays: Number(env.RETURN_WINDOW_DAYS ?? 7),
     // Vendor payouts: DesignWear keeps this percentage of each delivered order's subtotal.

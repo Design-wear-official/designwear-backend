@@ -3,6 +3,7 @@
 // the owner marks an account as staff with PUT /v1/admin/staff. Every status
 // change goes through here, so the lifecycle rules and each person's scope are
 // enforced by the API instead of by whichever screen they happen to use.
+import { newId } from '../context.js';
 import { STATUSES, canRoleMove, isFinal } from '../lifecycle.js';
 import * as v from '../validate.js';
 import { HttpError, bad } from '../validate.js';
@@ -35,8 +36,23 @@ export function registerStaffRoutes(router, ctx) {
   router.route('PUT', '/v1/admin/staff', async ({ req }) => {
     ctx.requireAdmin(req);
     const body = await ctx.readBody(req);
-    const user = await ctx.findUserByEmail(v.email(body.email));
-    if (!user) throw new HttpError(404, 'not_found', 'No account with that email. They must register first.');
+    const email = v.email(body.email);
+    let user = await ctx.findUserByEmail(email);
+    if (!user && body.role === null) throw new HttpError(404, 'not_found', 'No account with that email.');
+    if (!user) {
+      // Staff may be named before they ever open the app; they sign in with SethuCMS or Google.
+      user = {
+        id: newId('u_'),
+        email,
+        name: body.name ? v.str(body.name, 'name', { max: 80 }) : email.split('@')[0],
+        phone: '',
+        pw: null,
+        tokenVersion: 1,
+        createdAt: new Date(now()).toISOString(),
+      };
+      await store.put('users', user.id, user);
+      await ctx.indexUser(user);
+    }
 
     if (body.role === null) {
       delete user.staff;

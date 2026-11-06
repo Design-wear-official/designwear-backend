@@ -26,13 +26,22 @@ const gateway = async (url) => {
 };
 const address = (pin) => ({ label: 'Home', name: 'Ada', phone: '9999999999', line1: '1 Road', city: 'X', state: 'MH', pin });
 const ADMIN = 'a'.repeat(32);
+// A stand-in SethuCMS gateway: knows two sessions.
+const gatewayMe = async (url, init) => {
+  assert.equal(String(url), 'https://gw.test/w/ws/v1/me');
+  const token = String(init.headers.authorization).replace('Bearer ', '');
+  const people = { 'tok-owner-aaaaaaaaaaaa': { name: 'Boss', role: 'admin', email: 'boss@example.com' }, 'tok-noemail-aaaaaaaaaaa': { name: 'owner@example.com', role: 'admin' }, 'tok-stranger-aaaaaaaaaa': { name: 'S', role: 'editor', email: 'stranger@example.com' } };
+  return people[token]
+    ? { ok: true, status: 200, json: async () => ({ data: people[token] }) }
+    : { ok: false, status: 401, json: async () => ({}) };
+};
 
 let server, call;
 before(async () => {
-  const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40), DESIGNWEAR_ADMIN_TOKEN: ADMIN });
+  const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40), DESIGNWEAR_ADMIN_TOKEN: ADMIN, SETHUCMS_SIGNIN_URL: 'https://gw.test/w/ws/' });
   config.rateLimitMultiplier = 1000;
   const catalog = new CmsCatalog({ url: 'https://cms.test', connectionId: 'c', token: 't' }, gateway, 0);
-  const app = createApp({ config, store: await new Store(':memory:').load(), catalog, ai: {}, mailer: { send: async () => {} } });
+  const app = createApp({ config, store: await new Store(':memory:').load(), catalog, ai: {}, mailer: { send: async () => {} }, fetchImpl: gatewayMe });
   server = createServer(app);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -121,5 +130,27 @@ describe('staff', () => {
     assert.ok(s.sales > 0 && s.cashToCollect > 0);
     assert.equal((await call('GET', '/v1/staff/summary', { token: courier })).status, 403);
     assert.equal((await move(owner, otherId, { status: 'cancelled', note: 'customer called' })).body.order.status, 'cancelled');
+  });
+});
+
+describe('sign in with SethuCMS', () => {
+  const signIn = (token) => call('POST', '/v1/auth/sethucms', { body: { token } });
+  before(async () => {
+    // Named before they have ever opened the app: the account is created.
+    const r = await call('PUT', '/v1/admin/staff', { token: ADMIN, body: { email: 'Boss@Example.com', name: 'Boss', role: 'owner' } });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+  });
+
+  it('lets a listed staff member in with a SethuCMS session, as the role the owner gave them', async () => {
+    const r = await signIn('tok-owner-aaaaaaaaaaaa');
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal((await call('GET', '/v1/staff/me', { token: r.body.token })).body.staff.role, 'owner');
+  });
+
+  it('refuses people who are not staff, bad tokens, and a display name posing as an e-mail', async () => {
+    assert.equal((await signIn('tok-stranger-aaaaaaaaaa')).status, 403);
+    assert.equal((await signIn('tok-noemail-aaaaaaaaaaa')).status, 403, 'name owner@example.com is not a verified address');
+    assert.equal((await signIn('tok-unknown-aaaaaaaaaaaa')).status, 401);
+    assert.equal((await signIn('short')).status, 401);
   });
 });
