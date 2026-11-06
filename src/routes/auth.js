@@ -142,6 +142,42 @@ export function registerAuthRoutes(router, ctx) {
     return { status: 200, body: ctx.issue(user) };
   });
 
+  // Staff sign in with SethuCMS (Google/GitHub/code on its login portal). We ask the gateway who the
+  // token belongs to and let them in only if that verified address is a staff account here.
+  router.route('POST', '/v1/auth/sethucms', async ({ req }) => {
+    if (!config.staffSigninUrl) throw new HttpError(404, 'sethucms_unavailable', 'SethuCMS sign-in is not enabled.');
+    ctx.limit(`sethusignin:${ctx.ipOf(req)}`, 20, 15 * 60_000);
+    const { token } = await ctx.readBody(req);
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_\-.]{16,200}$/.test(token)) {
+      throw new HttpError(401, 'invalid_token', 'SethuCMS sign-in could not be verified.');
+    }
+
+    let who;
+    try {
+      const res = await ctx.fetchImpl(`${config.staffSigninUrl}/v1/me`, {
+        headers: { authorization: `Bearer ${token}` },
+        redirect: 'error',
+        signal: AbortSignal.timeout(6000),
+      });
+      if (res.status === 401 || res.status === 403) throw new HttpError(401, 'invalid_token', 'SethuCMS sign-in could not be verified.');
+      if (!res.ok) throw new Error(`gateway_${res.status}`);
+      who = (await res.json()).data;
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      throw new HttpError(502, 'sethucms_unavailable', 'Could not reach SethuCMS. Try again.');
+    }
+
+    // Only an address the identity provider verified counts; a display name never does.
+    const email = typeof who?.email === 'string' ? who.email.trim().toLowerCase() : '';
+    const user = email && (await ctx.findUserByEmail(email));
+    if (!user?.staff) {
+      await ctx.audit(email || 'unknown', 'auth.sethucms.denied', 'staff', {});
+      throw new HttpError(403, 'not_staff', 'This account is not set up as staff. Ask the owner.');
+    }
+    await ctx.audit(user.id, 'auth.sethucms.login', user.id, { role: user.staff.role });
+    return { status: 200, body: ctx.issue(user) };
+  });
+
   router.route('POST', '/v1/auth/password-reset/request', async ({ req }) => {
     ctx.limit(`reset:${ctx.ipOf(req)}`, 5, HOUR_MS);
     const email = v.email((await ctx.readBody(req)).email);
