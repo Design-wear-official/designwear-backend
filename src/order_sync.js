@@ -7,7 +7,7 @@
 // subtotal, tax, total, paymentMethod, paymentStatus, teamId, teamName,
 // trackingId, carrier, printFiles.
 
-import { hasStatus, sethuClient, statusOf } from './sethu.js';
+import { failureOf, hasStatus, sethuClient } from './sethu.js';
 
 export const ORDER_STATUSES = [
   'awaiting_payment', 'placed', 'confirmed', 'packed', 'shipped', 'delivered', 'cancelled',
@@ -64,14 +64,18 @@ export class NullOrderSync {
 }
 
 export class CmsOrderSync {
-  constructor({ url, connectionId, token, collection = 'orders' }, fetchImpl = fetch) {
-    Object.assign(this, { url, connectionId, token, collection, fetchImpl });
+  constructor({ url, connectionId, token, collection = 'orders', allowHttp = false }, fetchImpl = fetch) {
+    Object.assign(this, { url, connectionId, token, collection, allowHttp, fetchImpl });
   }
 
   // Built on first use: with no address or token (sync off) there is nothing to give the SDK.
   get orders() {
-    this._orders ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl })
-      .collection(this.connectionId, this.collection);
+    // Customers wait on these calls (their order list reads each order), so: 6 s and no retries,
+    // as before the SDK. A slow gateway then costs a few seconds, not half a minute.
+    this._orders ??= sethuClient({
+      url: this.url, token: this.token, fetchImpl: this.fetchImpl, allowHttp: this.allowHttp,
+      timeoutMs: 6000, maxRetries: 0,
+    }).collection(this.connectionId, this.collection);
     return this._orders;
   }
 
@@ -91,12 +95,12 @@ export class CmsOrderSync {
       await this.orders.update(id, changes, { idempotencyKey: `upd:${id}:${version}` });
       return;
     } catch (error) {
-      if (!hasStatus(error, 404)) throw new Error(`order_sync_failed:${statusOf(error)}`);
+      if (!hasStatus(error, 404)) throw new Error(`order_sync_failed:${failureOf(error)}`);
     }
     try {
       await this.orders.create(record, { idempotencyKey: `new:${id}` });
     } catch (error) {
-      throw new Error(`order_sync_failed:${statusOf(error)}`);
+      throw new Error(`order_sync_failed:${failureOf(error)}`);
     }
   }
 
@@ -118,11 +122,11 @@ export class CmsOrderSync {
     };
   }
 
-  /** How many orders SethuCMS holds ({ count, exact }), or null when it cannot say. */
+  /** How many orders SethuCMS holds ({ count, exact }), or null when it cannot say. Counts up to 10,000. */
   async count() {
     if (!this.enabled) return null;
     try {
-      return await this.orders.count();
+      return await this.orders.count({ max: 10_000 });
     } catch {
       return null;
     }

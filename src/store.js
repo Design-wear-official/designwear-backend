@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { createAccessTokenSource } from './google_auth.js';
-import { eq, hasStatus, sethuClient, statusOf } from './sethu.js';
+import { eq, failureOf, hasStatus, sethuClient } from './sethu.js';
 
 /**
  * Small document store: collections of JSON documents keyed by id.
@@ -212,8 +212,8 @@ export class FirestoreStore {
  * collection hidden from everyone else: it holds password hashes.
  */
 export class SethuStore {
-  constructor({ url, connectionId, token, collection = 'dw_store' }, fetchImpl = fetch) {
-    Object.assign(this, { url, connectionId, token, collection, fetchImpl });
+  constructor({ url, connectionId, token, collection = 'dw_store', allowHttp = false }, fetchImpl = fetch) {
+    Object.assign(this, { url, connectionId, token, collection, allowHttp, fetchImpl });
   }
 
   async load() {
@@ -222,8 +222,11 @@ export class SethuStore {
 
   // Built on first use, so a store that is never reached needs no gateway address.
   get records() {
-    this._records ??= sethuClient({ url: this.url, token: this.token, fetchImpl: this.fetchImpl })
-      .collection(this.connectionId, this.collection);
+    // Every request reads or writes here, so a bad gateway must fail fast: 10 s, one retry for reads.
+    this._records ??= sethuClient({
+      url: this.url, token: this.token, fetchImpl: this.fetchImpl, allowHttp: this.allowHttp,
+      timeoutMs: 10_000, maxRetries: 1,
+    }).collection(this.connectionId, this.collection);
     return this._records;
   }
 
@@ -237,7 +240,7 @@ export class SethuStore {
       return record?.data ? JSON.parse(record.data) : null;
     } catch (error) {
       if (hasStatus(error, 404)) return null;
-      throw new Error(`sethucms_store_error:${statusOf(error)}`);
+      throw new Error(`sethucms_store_error:${failureOf(error)}`);
     }
   }
 
@@ -250,7 +253,7 @@ export class SethuStore {
         if (predicate(doc)) results.push(doc);
       }
     } catch (error) {
-      throw new Error(`sethucms_store_error:${statusOf(error)}`);
+      throw new Error(`sethucms_store_error:${failureOf(error)}`);
     }
     return results;
   }
@@ -262,12 +265,12 @@ export class SethuStore {
       await this.records.update(key, { data });
       return doc;
     } catch (error) {
-      if (!hasStatus(error, 404)) throw new Error(`sethucms_store_error:${statusOf(error)}`);
+      if (!hasStatus(error, 404)) throw new Error(`sethucms_store_error:${failureOf(error)}`);
     }
     try {
       await this.records.create({ id: key, coll, data });
     } catch (error) {
-      throw new Error(`sethucms_store_error:${statusOf(error)}`);
+      throw new Error(`sethucms_store_error:${failureOf(error)}`);
     }
     return doc;
   }
@@ -276,7 +279,7 @@ export class SethuStore {
     try {
       await this.records.delete(this.#key(coll, id));
     } catch (error) {
-      if (!hasStatus(error, 404)) throw new Error(`sethucms_store_error:${statusOf(error)}`);
+      if (!hasStatus(error, 404)) throw new Error(`sethucms_store_error:${failureOf(error)}`);
     }
   }
 }
