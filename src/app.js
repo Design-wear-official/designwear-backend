@@ -11,6 +11,7 @@ import { registerCartRoutes } from './routes/cart.js';
 import { registerCatalogRoutes } from './routes/catalog.js';
 import { registerChallengeRoutes } from './routes/challenges.js';
 import { registerDesignRoutes } from './routes/designs.js';
+import { registerHomeRoutes } from './routes/home.js';
 import { registerHookRoutes } from './routes/hooks.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerOrderRoutes } from './routes/orders.js';
@@ -27,6 +28,7 @@ export function createApp(deps) {
   const presenters = createPresenters(ctx);
   const router = createRouter();
 
+  registerHomeRoutes(router, ctx);
   registerSystemRoutes(router, ctx);
   registerAuthRoutes(router, ctx);
   registerAccountRoutes(router, ctx);

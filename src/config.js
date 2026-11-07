@@ -12,6 +12,8 @@ function parseServiceAccount(raw) {
   }
 }
 
+const httpsOr = (value, fallback) => (/^https:\/\/[^\s]+$/.test(String(value ?? '').trim()) ? String(value).trim().replace(/\/+$/, '') : fallback);
+
 export function loadConfig(env = process.env) {
   const production = env.NODE_ENV === 'production';
   // The SethuCMS SDK refuses plain http except to localhost. Set SETHUCMS_ALLOW_HTTP=1 for a gateway on a
@@ -110,6 +112,16 @@ export function loadConfig(env = process.env) {
     // CDN's own CORS list). Comma-separated hosts; only /images/<project>/... paths.
     imageHosts: list(env.IMAGE_HOSTS ?? 'cdn.sanity.io'),
     adminToken: env.DESIGNWEAR_ADMIN_TOKEN ?? '',
+    // Public addresses shown on the API's home page (GET /). Not secrets; https only; override with env.
+    links: {
+      hub: httpsOr(env.HUB_URL, 'https://designwear-hub.vercel.app'),
+      shop: httpsOr(env.SHOP_URL, 'https://designwear-tawny.vercel.app'),
+      staff: httpsOr(env.STAFF_APP_URL, 'https://designwear-scm.vercel.app'),
+      cmsAdmin: httpsOr(env.CMS_ADMIN_URL, 'https://sethucms-admin.vercel.app'),
+      sdk: httpsOr(env.SDK_URL, 'https://designwear-sdk-docs.vercel.app'),
+      rules: httpsOr(env.RULES_URL, 'https://designwear-rules.vercel.app'),
+      data: httpsOr(env.DATA_URL, 'https://designwear-data.vercel.app'),
+    },
     // Where staff sign in with SethuCMS: the gateway that issues their session (it may include
     // a /w/<workspace> prefix). Unset = the SethuCMS sign-in route does not exist.
     staffSigninUrl: (env.SETHUCMS_SIGNIN_URL ?? '').replace(/\/+$/, ''),

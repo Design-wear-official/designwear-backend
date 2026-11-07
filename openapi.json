@@ -5,6 +5,19 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "root"
+        ],
+        "summary": "Front door: a page of links to the shop, Staff app, CMS admin, hub, SDK, order rules and data (HTML for browsers, JSON for programs)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/v1/health/live": {
       "get": {
         "tags": [
