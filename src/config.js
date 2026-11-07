@@ -124,7 +124,8 @@ export function loadConfig(env = process.env) {
     },
     // Where staff sign in with SethuCMS: the gateway that issues their session (it may include
     // a /w/<workspace> prefix). Unset = the SethuCMS sign-in route does not exist.
-    staffSigninUrl: (env.SETHUCMS_SIGNIN_URL ?? '').replace(/\/+$/, ''),
+    // Defaults to SETHUCMS_URL (the gateway the catalog comes from), so staff sign-in works without a second setting.
+    staffSigninUrl: (env.SETHUCMS_SIGNIN_URL || env.SETHUCMS_URL || '').replace(/\/+$/, ''),
     // Returns: days after delivery a customer may ask for one.
     returnWindowDays: Number(env.RETURN_WINDOW_DAYS ?? 7),
     // Vendor payouts: DesignWear keeps this percentage of each delivered order's subtotal.
@@ -134,6 +135,13 @@ export function loadConfig(env = process.env) {
     // Write access to SethuCMS `team_stock`, so vendors can update their own stock. Unset = read only.
     stockToken: env.SETHUCMS_STOCK_TOKEN ?? '',
   };
+
+  // DesignWear's own apps (shop, Staff app, hub) may always call the API from the browser, so adding an
+  // app never needs a second edit to ALLOWED_ORIGINS. ALLOWED_ORIGINS adds any other site.
+  const explicitOrigins = config.allowedOrigins.slice();
+  config.allowedOrigins = [
+    ...new Set([...explicitOrigins, ...['shop', 'staff', 'hub'].map((key) => new URL(config.links[key]).origin)]),
+  ];
 
   if (production) {
     const problems = [];
@@ -145,7 +153,7 @@ export function loadConfig(env = process.env) {
     if (config.serverless && !hasDatabase) {
       problems.push('SETHUCMS_STORE_TOKEN (or FIREBASE_SERVICE_ACCOUNT, or UPSTASH_REDIS_REST_URL and _TOKEN) must be set (no disk on Vercel)');
     }
-    if (config.allowedOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
+    if (explicitOrigins.length === 0) problems.push('ALLOWED_ORIGINS must be set');
     if (config.adminToken && config.adminToken.length < 24) {
       problems.push('DESIGNWEAR_ADMIN_TOKEN must be at least 24 characters');
     }

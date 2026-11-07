@@ -58,3 +58,33 @@ describe('GET / (the front door)', () => {
     assert.equal((await fetch(`${base}/v1/nope`)).status, 404);
   });
 });
+
+describe('which sites may call the API from a browser', () => {
+  const preflight = (origin) => fetch(`${base}/v1/staff/me`, {
+    method: 'OPTIONS',
+    headers: { origin, 'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization' },
+  });
+
+  it("allows DesignWear's own apps without any ALLOWED_ORIGINS setting", async () => {
+    for (const origin of ['https://designwear-scm.vercel.app', 'https://designwear-tawny.vercel.app', 'https://hub.example.com']) {
+      assert.equal((await preflight(origin)).headers.get('access-control-allow-origin'), origin, origin);
+    }
+  });
+
+  it('does not allow other sites', async () => {
+    assert.equal((await preflight('https://evil.example.com')).headers.get('access-control-allow-origin'), null);
+  });
+
+  it('adds ALLOWED_ORIGINS on top, and production still insists it is set', () => {
+    const config = loadConfig({ DESIGNWEAR_JWT_SECRET: 'x'.repeat(40), ALLOWED_ORIGINS: 'https://partner.example.com' });
+    assert.ok(config.allowedOrigins.includes('https://partner.example.com'));
+    assert.ok(config.allowedOrigins.includes('https://designwear-scm.vercel.app'));
+    assert.throws(() => loadConfig({ NODE_ENV: 'production', DESIGNWEAR_JWT_SECRET: 'x'.repeat(40), SETHUCMS_STORE_TOKEN: 't', SETHUCMS_URL: 'https://c.test', SETHUCMS_STORE_CONNECTION_ID: 'c' }), /ALLOWED_ORIGINS must be set/);
+  });
+
+  it('staff sign-in uses the catalog gateway unless told otherwise', () => {
+    assert.equal(loadConfig({ SETHUCMS_URL: 'https://cms.test/w/ws/' }).staffSigninUrl, 'https://cms.test/w/ws');
+    assert.equal(loadConfig({ SETHUCMS_URL: 'https://cms.test', SETHUCMS_SIGNIN_URL: 'https://login.test/' }).staffSigninUrl, 'https://login.test');
+    assert.equal(loadConfig({}).staffSigninUrl, '');
+  });
+});
